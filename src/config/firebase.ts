@@ -5,11 +5,12 @@ import { getFirestore } from "firebase/firestore";
 
 // TODO: Replace this object with the one you copied from the Firebase Console!
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyA8u1Cc3EznEdfsvNYrQcAiSo-5SwjZj7k",
+  authDomain: "roadmap-app-5472a.firebaseapp.com",
+  projectId: "roadmap-app-5472a",
+  storageBucket: "roadmap-app-5472a.firebasestorage.app",
+  messagingSenderId: "1037375495804",
+  appId: "1:1037375495804:web:f95396711bac0ad114b3f9"
 };
 
 // Initialize Firebase
