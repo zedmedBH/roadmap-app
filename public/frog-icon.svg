@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+  <circle cx="25" cy="85" r="15" fill="#4CAF50" stroke="#263238" stroke-width="4"/>
+  <circle cx="25" cy="85" r="6" fill="#263238"/>
+  
+  <circle cx="95" cy="85" r="15" fill="#4CAF50" stroke="#263238" stroke-width="4"/>
+  <circle cx="95" cy="85" r="6" fill="#263238"/>
+
+  <rect x="30" y="40" width="60" height="60" rx="15" fill="#4CAF50" stroke="#263238" stroke-width="4"/>
+
+  <rect x="40" y="65" width="40" height="25" rx="5" fill="#81C784" stroke="#263238" stroke-width="3"/>
+
+  <circle cx="40" cy="35" r="18" fill="#4CAF50" stroke="#263238" stroke-width="4"/>
+  <circle cx="40" cy="35" r="10" fill="#263238"/>
+  <circle cx="40" cy="35" r="4" fill="#00E5FF"/> <circle cx="80" cy="35" r="18" fill="#4CAF50" stroke="#263238" stroke-width="4"/>
+  <circle cx="80" cy="35" r="10" fill="#263238"/>
+  <circle cx="80" cy="35" r="4" fill="#00E5FF"/> <path d="M 45 55 Q 60 58 75 55" fill="none" stroke="#263238" stroke-width="3" stroke-linecap="round"/>
+
+  <circle cx="45" cy="72" r="2" fill="#263238"/>
+  <circle cx="75" cy="72" r="2" fill="#263238"/>
+  <circle cx="45" cy="83" r="2" fill="#263238"/>
+  <circle cx="75" cy="83" r="2" fill="#263238"/>
+</svg>
