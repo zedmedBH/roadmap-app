@@ -63,7 +63,12 @@ Custom Item Renderer: Build a custom React component for the tasks on the X-axis
 
 Drag & Drop Sync: Hook into onItemMove and onItemResize. When a student drags a block, update their specific TaskStates custom dates in Firestore (leaving the master task intact).
 
+Teacher can save tasks directly to the Master Timeline (with dates) OR save them as a "Template" to the taskTemplates Firebase collection (without dates).
+
 Phase 4: Modals, Interactions, & Submissions
+
+Build a "Task Bank" UI for students to browse taskTemplates. Students can select a template, choose their own start/end dates, and push it to their personal timeline view.
+
 Task Summary Modal: Clicking a timeline block opens a modal listing sub-tasks and the overall completion status toggle.
 
 Sub-task Detail Modal: Clicking a sub-task opens instructions, resources, and an "Involvement Level" slider for that specific student.

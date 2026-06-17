@@ -3,6 +3,7 @@ import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import StudentRosterImport from './Teacher/StudentRosterImport';
 import GroupManagement from './Teacher/GroupManagement';
+import TimelineView from './Timeline/TimelineView';
 
 const Dashboard: React.FC = () => {
   const { user, logout } = useAuth();
@@ -29,6 +30,7 @@ const Dashboard: React.FC = () => {
         <div className="grid grid-cols-1 gap-6">
           <StudentRosterImport />
           <GroupManagement />
+          <TimelineView />
         </div>
       )}
       
