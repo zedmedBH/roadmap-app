@@ -92,12 +92,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const loginWithGoogle = async () => {
     try {
-      setLoading(true);
+      //setLoading(true);
       const result = await signInWithPopup(auth, googleProvider);
       await fetchOrLinkUserProfile(result.user);
     } catch (error) {
       console.error("Error logging in with Google:", error);
-      setLoading(false);
+      //setLoading(false);
     }
   };
 
