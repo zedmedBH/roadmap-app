@@ -2,6 +2,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './components/Login';
+import Dashboard from './components/Dashboard';
 
 // A simple wrapper to protect routes
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -9,20 +10,6 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   if (loading) return <div className="p-8 text-center">Loading...</div>;
   if (!user) return <Navigate to="/login" replace />;
   return <>{children}</>;
-};
-
-// A placeholder component for the Dashboard
-const Dashboard = () => {
-  const { user, logout } = useAuth();
-  return (
-    <div className="p-4 bg-white rounded shadow">
-      <h2 className="text-xl font-bold mb-4">Welcome, {user?.firstName}!</h2>
-      <p>Role: <span className="uppercase font-semibold text-blue-600">{user?.role}</span></p>
-      <button onClick={logout} className="mt-4 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition">
-        Log Out
-      </button>
-    </div>
-  );
 };
 
 function AppRoutes() {
