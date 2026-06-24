@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import StudentRosterImport from './Teacher/StudentRosterImport';
 import GroupManagement from './Teacher/GroupManagement';
 import TimelineView from './Timeline/TimelineView';
+import StudentTaskBank from './Student/StudentTaskBank';
 
 const Dashboard: React.FC = () => {
   const { user, logout } = useAuth();
@@ -31,14 +32,16 @@ const Dashboard: React.FC = () => {
           <StudentRosterImport />
           <GroupManagement />
           <TimelineView />
+          <StudentTaskBank />{/*Temporarily here while developing*/}
         </div>
       )}
       
       {/* Show Student-specific features */}
       {user?.role === 'student' && (
-        <div className="p-6 bg-white rounded-lg shadow-md border border-gray-200">
-          <h3 className="text-xl font-bold mb-2">Student View</h3>
-          <p className="text-gray-600">Your groups and timelines will appear here.</p>
+        <div className="grid grid-cols-1 gap-6">
+          <TimelineView />
+          <StudentTaskBank />
+          {/* We will eventually add the Student's Personal Timeline here too! */}
         </div>
       )}
     </div>

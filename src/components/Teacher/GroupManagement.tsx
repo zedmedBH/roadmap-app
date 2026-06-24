@@ -88,7 +88,7 @@ const GroupManagement: React.FC = () => {
     fetchData();
   }, []);
 
-  const handleCreateGroup = async (e: React.FormEvent) => {
+  const handleCreateGroup = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     if (!newGroupName.trim()) return;
 

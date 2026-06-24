@@ -1,17 +1,17 @@
 // src/context/AuthContext.tsx
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { type User as FirebaseUser, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import { auth, googleProvider, db } from '../config/firebase';
 
-// Match the data model from your blueprint
 export interface AppUser {
-  id: string; // Firebase Auth UID
+  id: string;
   email: string;
   firstName: string;
   lastName: string;
   role: 'teacher' | 'student';
   classId?: string;
+  groupId?: string;
 }
 
 interface AuthContextType {
@@ -19,34 +19,52 @@ interface AuthContextType {
   loading: boolean;
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
+  toggleViewRole: () => void;
+  isViewingAsStudent: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<AppUser | null>(null);
+  const [actualUser, setActualUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
+  
+  // Developer Toggle States
+  const [viewAsStudent, setViewAsStudent] = useState(false);
+  const [firstAvailableGroup, setFirstAvailableGroup] = useState<string | undefined>(undefined);
 
-  // Function to fetch or link Firestore user profile
+  // The user object exposed to the app factors in the role override
+  const user = actualUser ? {
+    ...actualUser,
+    role: (viewAsStudent ? 'student' : actualUser.role) as 'teacher' | 'student',
+    // If teacher is viewing as student, spoof a groupId so team tasks work
+    groupId: actualUser.groupId || (viewAsStudent ? firstAvailableGroup : undefined)
+  } : null;
+
+  useEffect(() => {
+    // Pre-fetch a group ID just in case the teacher wants to test "View as Student"
+    const fetchFirstGroup = async () => {
+      const groupSnap = await getDocs(query(collection(db, 'groups')));
+      if (!groupSnap.empty) {
+        setFirstAvailableGroup(groupSnap.docs[0].id);
+      }
+    };
+    fetchFirstGroup();
+  }, []);
+
   const fetchOrLinkUserProfile = async (firebaseUser: FirebaseUser) => {
     const userRef = doc(db, 'users', firebaseUser.uid);
     const userSnap = await getDoc(userRef);
 
-    if (userSnap.exists()) {
-      // User exists, just set them in state
-      setUser({ id: userSnap.id, ...userSnap.data() } as AppUser);
-    } else {
-      // PHASE 2 ACCOUNT LINKING LOGIC
-      // Check if a teacher pre-loaded this student via CSV using their email
+    if (!userSnap.exists()) {
       const usersRef = collection(db, 'users');
       const q = query(usersRef, where('email', '==', firebaseUser.email));
       const querySnapshot = await getDocs(q);
 
       if (!querySnapshot.empty) {
-        // Match found! Link the Auth ID to the existing profile data
         const existingDoc = querySnapshot.docs[0];
         const existingData = existingDoc.data();
-        
+
         const newAppUser: AppUser = {
           id: firebaseUser.uid,
           email: firebaseUser.email || '',
@@ -56,58 +74,78 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           classId: existingData.classId,
         };
 
-        // Write the new document with the correct Auth UID and delete the old placeholder
         await setDoc(userRef, newAppUser);
-        // (Optional: Add logic to delete the old placeholder document if its ID wasn't the email)
-
-        setUser(newAppUser);
       } else {
-        // For development/first-time teacher setup: Create a brand new teacher profile
-        // In production, you might restrict this so only approved teachers can create accounts
         const newUser: AppUser = {
           id: firebaseUser.uid,
           email: firebaseUser.email || '',
           firstName: firebaseUser.displayName?.split(' ')[0] || '',
           lastName: firebaseUser.displayName?.split(' ').slice(1).join(' ') || '',
-          role: 'teacher', // Defaulting new unknown logins to teacher for initial setup
+          role: 'teacher',
         };
         await setDoc(userRef, newUser);
-        setUser(newUser);
       }
     }
   };
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    let unsubUser: () => void;
+    let unsubGroups: () => void;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         await fetchOrLinkUserProfile(firebaseUser);
+
+        const userRef = doc(db, 'users', firebaseUser.uid);
+        
+        unsubUser = onSnapshot(userRef, (docSnap) => {
+          if (docSnap.exists()) {
+            const baseUser = { id: docSnap.id, ...docSnap.data() } as AppUser;
+
+            // REAL-TIME LISTENER: Check which group the user is inside
+            const groupsQ = query(collection(db, 'groups'), where('memberIds', 'array-contains', firebaseUser.uid));
+            unsubGroups = onSnapshot(groupsQ, (groupSnap) => {
+              const groupId = groupSnap.empty ? undefined : groupSnap.docs[0].id;
+              setActualUser({ ...baseUser, groupId });
+              setLoading(false);
+            });
+          } else {
+            setLoading(false);
+          }
+        });
       } else {
-        setUser(null);
+        setActualUser(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribeAuth();
+      if (unsubUser) unsubUser();
+      if (unsubGroups) unsubGroups();
+    };
   }, []);
 
   const loginWithGoogle = async () => {
     try {
-      //setLoading(true);
-      const result = await signInWithPopup(auth, googleProvider);
-      await fetchOrLinkUserProfile(result.user);
+      await signInWithPopup(auth, googleProvider);
     } catch (error) {
       console.error("Error logging in with Google:", error);
-      //setLoading(false);
     }
   };
 
   const logout = async () => {
     await signOut(auth);
-    setUser(null);
+    setActualUser(null);
+    setViewAsStudent(false);
+  };
+
+  const toggleViewRole = () => {
+    setViewAsStudent(!viewAsStudent);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, loginWithGoogle, logout }}>
+    <AuthContext.Provider value={{ user, loading, loginWithGoogle, logout, toggleViewRole, isViewingAsStudent: viewAsStudent }}>
       {!loading && children}
     </AuthContext.Provider>
   );
