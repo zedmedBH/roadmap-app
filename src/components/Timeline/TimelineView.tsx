@@ -8,6 +8,7 @@ import { db } from '../../config/firebase';
 import { useAuth, type AppUser } from '../../context/AuthContext';
 import TaskPanel from './TaskPanel';
 import TaskSummaryModal from './TaskSummaryModal';
+import { FiMaximize2 } from "react-icons/fi";
 
 export interface RoadmapGroup {
   id: string;
@@ -35,7 +36,7 @@ const TimelineView: React.FC = () => {
   const { user, activeClassId } = useAuth();
   const [baseGroups, setBaseGroups] = useState<RoadmapGroup[]>([]);
   const [items, setItems] = useState<any[]>([]);
-  const [students, setStudents] = useState<AppUser[]>([]);
+  const [students, setStudents] = useState<AppUser[]>([]); 
   const [loading, setLoading] = useState(true);
   
   const [isPanelOpen, setIsPanelOpen] = useState(false);
@@ -45,13 +46,9 @@ const TimelineView: React.FC = () => {
   const defaultTimeEnd = dayjs().add(14, 'day').valueOf();
 
   useEffect(() => {
-    // Determine whose class we are looking at
     const targetClassId = user?.role === 'teacher' ? activeClassId : user?.classId;
-    
-    // Wait until we have a class ID to avoid querying the whole database
     if (!targetClassId) return;
 
-    // 1. Listen to Groups
     const qGroups = query(collection(db, 'groups'), where('classId', '==', targetClassId));
     const unsubscribeGroups = onSnapshot(qGroups, (snapshot) => {
       const fetchedGroups = snapshot.docs.map(doc => ({
@@ -62,13 +59,11 @@ const TimelineView: React.FC = () => {
       setBaseGroups(fetchedGroups);
     });
 
-    // 2. Listen to Students (so we can get their names for the timeline)
     const qUsers = query(collection(db, 'users'), where('role', '==', 'student'), where('classId', '==', targetClassId));
     const unsubscribeUsers = onSnapshot(qUsers, (snapshot) => {
       setStudents(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as AppUser)));
     });
 
-    // 3. Listen to Timeline Items
     const qItems = query(collection(db, 'timelineItems'));
     const unsubscribeItems = onSnapshot(qItems, (snapshot) => {
       const activeGroupId = user?.groupId || 'unassigned-team';
@@ -78,7 +73,6 @@ const TimelineView: React.FC = () => {
         .filter(data => !data.unclaimed) 
         .filter(data => {
           if (user?.role === 'teacher') return true; 
-          // STUDENT FILTER: Only show tasks explicitly in their Team Row or Personal Row
           return data.group === activeGroupId || data.group === user?.id;
         })
         .map(data => {
@@ -96,6 +90,9 @@ const TimelineView: React.FC = () => {
             taskType: data.taskType,
             templateId: data.templateId,
             broadcastId: data.broadcastId,
+            // Explicitly set permissions here so the library disables the cursor natively
+            canMove: !isMasterTaskForStudent,
+            canResize: !isMasterTaskForStudent ? 'both' : false,
             itemProps: {
               style: {
                 background: data.color || '#2196F3',
@@ -123,38 +120,29 @@ const TimelineView: React.FC = () => {
     };
   }, [user, activeClassId]);
 
-  // ROW FILTERING & MAPPING
   let renderedGroups: RoadmapGroup[] = [];
 
   if (user?.role === 'student') {
     const activeGroupId = user.groupId || 'unassigned-team';
     const myTeam = baseGroups.find(g => g.id === activeGroupId);
     
-    // 1. Add their team's row
-    if (myTeam) {
-      renderedGroups.push(myTeam);
-    } else {
-      renderedGroups.push({ id: 'unassigned-team', title: 'My Team', order: 0 });
-    }
+    if (myTeam) renderedGroups.push(myTeam);
+    else renderedGroups.push({ id: 'unassigned-team', title: 'My Team', order: 0 });
     
-    // 2. Add their personal row
     renderedGroups.push({
       id: user.id,
       title: '👤 My Personal Tasks',
       order: myTeam ? myTeam.order + 0.5 : 1
     });
   } else {
-    // Teacher View: Show all teams + floating personal rows mapped to names
     renderedGroups = [...baseGroups];
     const knownGroupIds = new Set(baseGroups.map(g => g.id));
     const extraGroups = new Map<string, string>();
     
     items.forEach(item => {
       if (!knownGroupIds.has(item.group)) {
-        // Look up the student's name
         const student = students.find(s => s.id === item.group);
         const displayName = student ? `${student.firstName} ${student.lastName}` : `Unknown ID: ${item.group.substring(0, 4)}...`;
-        
         extraGroups.set(item.group, `👤 ${displayName}`);
       }
     });
@@ -169,8 +157,18 @@ const TimelineView: React.FC = () => {
   const handleItemMove = async (itemId: string, dragTime: number, newGroupOrder: number) => {
     const item = items.find(i => i.id === itemId);
     const group = renderedGroups[newGroupOrder]; 
-    if (user?.role === 'student' && !item.userId) { alert("You cannot move master roadmap tasks."); return; }
     if (!item || !group) return;
+
+    if (user?.role === 'student') {
+      if (!item.userId) { 
+        alert("You cannot move master roadmap tasks."); 
+        return; 
+      }
+      // PREVENT VERTICAL MOVEMENT: If the destination group isn't the task's original group, reject the drop.
+      if (group.id !== item.group) {
+        return; 
+      }
+    }
 
     const duration = item.end_time - item.start_time;
     const newStartTime = dragTime;
@@ -209,10 +207,69 @@ const TimelineView: React.FC = () => {
           <div className="text-center py-10 text-gray-500 border-2 border-dashed rounded-lg">No phases/groups found.</div>
         ) : (
           <Timeline
-            groups={renderedGroups} items={items} defaultTimeStart={defaultTimeStart} defaultTimeEnd={defaultTimeEnd}
-            stackItems={true} canMove={true} canResize="both" lineHeight={50} itemHeightRatio={0.75}
-            onItemMove={handleItemMove} onItemResize={handleItemResize} 
-            onItemSelect={(id) => setSelectedTaskId(String(id))}
+            groups={renderedGroups} 
+            items={items} 
+            defaultTimeStart={defaultTimeStart} 
+            defaultTimeEnd={defaultTimeEnd}
+            stackItems={true} 
+            canMove={true} 
+            canResize="both" 
+            useResizeHandle={true} // <-- ADDED THIS to fix the resize issue
+            lineHeight={50} 
+            itemHeightRatio={0.75}
+            onItemMove={handleItemMove} 
+            onItemResize={handleItemResize} 
+            itemRenderer={({ item, itemContext, getItemProps, getResizeProps }) => {
+              const { left: leftResizeProps, right: rightResizeProps } = getResizeProps();
+              
+              const isMasterTaskForStudent = user?.role === 'student' && !item.userId;
+              const isIndividual = item.taskType === 'individual';
+
+              return (
+                <div
+                  {...getItemProps({
+                    style: {
+                      background: item.itemProps?.style?.background || '#2196F3',
+                      color: 'white',
+                      borderRadius: '4px',
+                      border: isMasterTaskForStudent ? '2px dashed rgba(255,255,255,0.6)' : 'none',
+                      opacity: isMasterTaskForStudent ? 0.7 : 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      // Increased right padding to 24px to clear the absolute resize handle
+                      padding: '0 8px 0 8px', 
+                      overflow: 'hidden',
+                      backgroundImage: isIndividual 
+                        ? 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.1) 10px, rgba(255,255,255,0.1) 20px)' 
+                        : 'none'
+                    }
+                  })}
+                >
+                  {/* Left Resize Handle (Added w-3 and z-20) */}
+                  {itemContext.useResizeHandle ? <div {...leftResizeProps} className="!w-3 h-full absolute left-0 cursor-ew-resize hover:bg-white/30 z-20" /> : null}
+
+                  <span className="truncate flex-1 text-sm font-medium pr-2">
+                    {itemContext.title}
+                  </span>
+                  
+                  <button 
+                    onPointerDown={(e) => e.stopPropagation()} 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedTaskId(String(item.id));
+                    }}
+                    className="text-white bg-black/20 hover:bg-black/40 rounded p-1 z-10 cursor-pointer transition-colors flex items-center justify-center mr-1"
+                    title="View Task Details"
+                  >
+                    <FiMaximize2 className="w-4 h-4" />
+                  </button>
+
+                  {/* Right Resize Handle (Added w-3 and z-20) */}
+                  {itemContext.useResizeHandle ? <div {...rightResizeProps} className="!w-3 h-full absolute right-0 cursor-ew-resize hover:bg-white/30 z-20" /> : null}
+                </div>
+              );
+            }}
           />
         )}
       </div>

@@ -1,6 +1,6 @@
 // src/components/Timeline/TaskSummaryModal.tsx
 import React, { useState, useEffect } from 'react';
-import { doc, updateDoc, collection, addDoc, deleteDoc, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { doc, updateDoc, collection, onSnapshot, query, orderBy, where, getDocs } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { useAuth } from '../../context/AuthContext';
 
@@ -21,25 +21,15 @@ const STATUS_OPTIONS = ['incomplete', 'in-progress', 'complete'];
 const TaskSummaryModal: React.FC<TaskSummaryModalProps> = ({ isOpen, onClose, task }) => {
   const { user } = useAuth();
   const [isUpdating, setIsUpdating] = useState(false);
-  
-  // Sub-task states
   const [subTasks, setSubTasks] = useState<SubTask[]>([]);
-  const [isAddingSubTask, setIsAddingSubTask] = useState(false);
-  const [newSubTaskTitle, setNewSubTaskTitle] = useState('');
 
-  // Listen for sub-tasks in real-time
   useEffect(() => {
     if (!isOpen || !task?.id) return;
-
     const subTasksRef = collection(db, 'timelineItems', task.id, 'subtasks');
     const q = query(subTasksRef, orderBy('createdAt', 'asc'));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedSubs = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as SubTask[];
-      setSubTasks(fetchedSubs);
+      setSubTasks(snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as SubTask[]);
     });
 
     return () => unsubscribe();
@@ -47,17 +37,40 @@ const TaskSummaryModal: React.FC<TaskSummaryModalProps> = ({ isOpen, onClose, ta
 
   if (!isOpen || !task) return null;
 
-  // Determine if the current user has permission to edit the task/sub-tasks
   const canEdit = user?.role === 'teacher' || 
                   task.userId === user?.id || 
                   (task.taskType === 'team' && task.teamId === user?.groupId);
 
   const handleStatusChange = async (newStatus: string) => {
     if (!canEdit) return;
+
+    // PRE-REQUISITE CHECK: Prevent completing if dependencies are not met
+    if (newStatus === 'complete' && task.dependencies && task.dependencies.length > 0) {
+      try {
+        const depsQ = query(
+          collection(db, 'timelineItems'),
+          where('group', '==', task.group),
+          where('templateId', 'in', task.dependencies)
+        );
+        const depsSnap = await getDocs(depsQ);
+        
+        const incompleteDeps = depsSnap.docs.filter(d => {
+          const data = d.data();
+          return data.status !== 'complete' && !data.unclaimed;
+        });
+
+        if (incompleteDeps.length > 0) {
+          alert("Warning: You cannot complete this task until all prerequisite tasks are marked as 'complete'.");
+          return;
+        }
+      } catch (err) {
+        console.error("Dependency check failed:", err);
+      }
+    }
+
     setIsUpdating(true);
     try {
-      const taskRef = doc(db, 'timelineItems', task.id);
-      await updateDoc(taskRef, { status: newStatus });
+      await updateDoc(doc(db, 'timelineItems', task.id), { status: newStatus });
     } catch (error) {
       console.error("Error updating status:", error);
     } finally {
@@ -65,40 +78,28 @@ const TaskSummaryModal: React.FC<TaskSummaryModalProps> = ({ isOpen, onClose, ta
     }
   };
 
-  const handleAddSubTask = async (e: React.SyntheticEvent) => {
-    e.preventDefault();
-    if (!canEdit || !newSubTaskTitle.trim()) return;
-
+  const handleRemoveTask = async () => {
+    // DEPENDENCY CHECK: Prevent removal if something else depends on this
     try {
-      await addDoc(collection(db, 'timelineItems', task.id, 'subtasks'), {
-        title: newSubTaskTitle.trim(),
-        completed: false,
-        createdAt: Date.now()
-      });
-      setNewSubTaskTitle('');
-      setIsAddingSubTask(false);
-    } catch (error) {
-      console.error("Error adding sub-task:", error);
-    }
-  };
+      const dependentQ = query(
+        collection(db, 'timelineItems'),
+        where('group', '==', task.group),
+        where('dependencies', 'array-contains', task.templateId),
+        where('unclaimed', '==', false)
+      );
+      const depSnap = await getDocs(dependentQ);
+      
+      if (!depSnap.empty) {
+        alert("Action Blocked: Another task currently on your timeline requires this task as a prerequisite. Remove the dependent task first.");
+        return;
+      }
 
-  const handleToggleSubTask = async (subTaskId: string, currentStatus: boolean) => {
-    if (!canEdit) return;
-    try {
-      await updateDoc(doc(db, 'timelineItems', task.id, 'subtasks', subTaskId), {
-        completed: !currentStatus
-      });
-    } catch (error) {
-      console.error("Error toggling sub-task:", error);
-    }
-  };
-
-  const handleDeleteSubTask = async (subTaskId: string) => {
-    if (!canEdit) return;
-    try {
-      await deleteDoc(doc(db, 'timelineItems', task.id, 'subtasks', subTaskId));
-    } catch (error) {
-      console.error("Error deleting sub-task:", error);
+      if (window.confirm("Remove this task from the timeline? Your journal progress will be saved.")) {
+        await updateDoc(doc(db, 'timelineItems', task.id), { unclaimed: true });
+        onClose();
+      }
+    } catch (err) {
+      console.error("Error checking dependents:", err);
     }
   };
 
@@ -116,14 +117,11 @@ const TaskSummaryModal: React.FC<TaskSummaryModalProps> = ({ isOpen, onClose, ta
             </div>
             <h3 className="text-xl font-bold text-gray-800">{task.title}</h3>
           </div>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-800 text-2xl leading-none self-start">
-            &times;
-          </button>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-800 text-2xl leading-none self-start">&times;</button>
         </div>
 
         {/* Body */}
         <div className="p-6 space-y-6 flex-1 overflow-y-auto">
-          
           {/* Status Toggle */}
           <div>
             <h4 className="text-sm font-semibold text-gray-600 mb-2 uppercase tracking-wide">Overall Status</h4>
@@ -145,123 +143,49 @@ const TaskSummaryModal: React.FC<TaskSummaryModalProps> = ({ isOpen, onClose, ta
             </div>
           </div>
 
-          {/* Sub-tasks Section */}
+          {/* Sub-tasks Section (Read Only) */}
           <div>
-            <div className="flex justify-between items-center mb-2">
-              <h4 className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Sub-tasks</h4>
-              {canEdit && !isAddingSubTask && (
-                <button 
-                  onClick={() => setIsAddingSubTask(true)}
-                  className="text-xs font-medium text-blue-600 hover:underline"
-                >
-                  + Add Sub-task
-                </button>
-              )}
-            </div>
-            
+            <h4 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-2">Sub-tasks (Read Only)</h4>
             <div className="border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
-              {subTasks.length === 0 && !isAddingSubTask ? (
-                <div className="p-4 text-center text-sm text-gray-500 italic bg-white">
-                  No sub-tasks created yet. Break down this task into smaller steps!
-                </div>
-              ) : (
-                <ul className="divide-y divide-gray-100 bg-white">
-                  {subTasks.map((sub) => (
-                    <li key={sub.id} className="p-3 flex items-start gap-3 hover:bg-gray-50 transition-colors group">
-                      <input 
-                        type="checkbox" 
-                        checked={sub.completed}
-                        onChange={() => handleToggleSubTask(sub.id, sub.completed)}
-                        disabled={!canEdit}
-                        className="mt-1 w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer disabled:cursor-not-allowed"
-                      />
-                      <span className={`flex-1 text-sm ${sub.completed ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
-                        {sub.title}
-                      </span>
-                      {canEdit && (
-                        <button 
-                          onClick={() => handleDeleteSubTask(sub.id)}
-                          className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity px-1"
-                          title="Delete sub-task"
-                        >
-                          &times;
-                        </button>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              {/* Add Sub-task Form */}
-              {isAddingSubTask && (
-                <form onSubmit={handleAddSubTask} className="p-3 bg-blue-50 border-t border-blue-100">
-                  <input 
-                    type="text" 
-                    value={newSubTaskTitle}
-                    onChange={(e) => setNewSubTaskTitle(e.target.value)}
-                    placeholder="Describe the step..."
-                    className="w-full text-sm p-2 border border-blue-200 rounded focus:ring-blue-500 focus:border-blue-500 mb-2 outline-none"
-                    autoFocus
-                  />
-                  <div className="flex justify-end gap-2">
-                    <button 
-                      type="button" 
-                      onClick={() => { setIsAddingSubTask(false); setNewSubTaskTitle(''); }}
-                      className="text-xs px-3 py-1.5 text-gray-600 hover:bg-gray-200 rounded"
-                    >
-                      Cancel
-                    </button>
-                    <button 
-                      type="submit" 
-                      disabled={!newSubTaskTitle.trim()}
-                      className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-blue-300"
-                    >
-                      Save
-                    </button>
-                  </div>
-                </form>
-              )}
+              <ul className="divide-y divide-gray-100 bg-white">
+                {subTasks.map((sub) => (
+                  <li key={sub.id} className="p-3 flex items-center gap-3">
+                    <span className={`flex-1 text-sm ${sub.completed ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
+                      {sub.title}
+                    </span>
+                  </li>
+                ))}
+                {subTasks.length === 0 && (
+                  <li className="p-3 text-sm text-gray-500 italic">No sub-tasks.</li>
+                )}
+              </ul>
             </div>
           </div>
-
+          
+          <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg flex justify-between items-center">
+            <p className="text-sm text-blue-800">Ready to work on this task?</p>
+            <button className="bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700 font-medium text-sm">
+              Open Engineering Journal
+            </button>
+          </div>
         </div>
 
         {/* Footer */}
         <div className="p-4 bg-gray-50 border-t flex justify-between items-center">
           <div>
             {user?.role === 'teacher' ? (
-              <p className="text-sm text-gray-500 font-medium italic pr-4">
-                To edit or delete this task globally, please use the Master Task Management panel on your dashboard.
-              </p>
-            ) : canEdit && task.templateId && !task.broadcastId ? ( // <-- Add && !task.broadcastId
+              <p className="text-sm text-gray-500 font-medium italic pr-4">Edit globally via Master Task Management.</p>
+            ) : canEdit && task.templateId && !task.broadcastId ? (
               <button 
-                onClick={async () => {
-                  if (window.confirm("Remove this task from the timeline? Your sub-task progress will be saved in the Task Bank.")) {
-                    try {
-                      // Soft Delete: Sets unclaimed to true
-                      await updateDoc(doc(db, 'timelineItems', task.id), {
-                        unclaimed: true
-                      });
-                      onClose();
-                    } catch (err) {
-                      console.error("Error unclaiming task:", err);
-                    }
-                  }
-                }}
+                onClick={handleRemoveTask}
                 className="px-4 py-2 text-orange-600 bg-orange-50 border border-orange-200 rounded hover:bg-orange-100 transition-colors font-medium text-sm whitespace-nowrap"
               >
                 Remove from Timeline
               </button>
             ) : null}
           </div>
-          <button 
-            onClick={onClose}
-            className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition-colors font-medium"
-          >
-            Close
-          </button>
+          <button onClick={onClose} className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 font-medium">Close</button>
         </div>
-
       </div>
     </div>
   );

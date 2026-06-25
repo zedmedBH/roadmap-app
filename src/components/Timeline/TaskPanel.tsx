@@ -1,6 +1,6 @@
 // src/components/Timeline/TaskPanel.tsx
-import React, { useState } from 'react';
-import { collection, addDoc, getDocs, query, where } from 'firebase/firestore';
+import React, { useState, useEffect } from 'react';
+import { collection, addDoc, getDocs, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import dayjs from 'dayjs';
 
@@ -26,11 +26,25 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
   const [endDate, setEndDate] = useState(dayjs().add(3, 'day').format('YYYY-MM-DD'));
   const [color, setColor] = useState(TASK_COLORS[0].value);
   
-  // New State for Sub-Tasks
+  // Sub-Tasks State
   const [subTasks, setSubTasks] = useState<string[]>([]);
   const [newSubTask, setNewSubTask] = useState('');
   
+  // NEW: Dependencies State
+  const [existingTemplates, setExistingTemplates] = useState<{id: string, title: string}[]>([]);
+  const [selectedDependencies, setSelectedDependencies] = useState<string[]>([]);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Fetch existing templates to populate the Prerequisites list
+  useEffect(() => {
+    if (!isOpen) return;
+    const q = query(collection(db, 'taskTemplates'));
+    const unsubscribe = onSnapshot(q, (snap) => {
+      setExistingTemplates(snap.docs.map(d => ({ id: d.id, title: d.data().title })));
+    });
+    return () => unsubscribe();
+  }, [isOpen]);
 
   const handleAddSubTask = () => {
     if (newSubTask.trim()) {
@@ -43,11 +57,18 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
     setSubTasks(subTasks.filter((_, i) => i !== index));
   };
 
+  const toggleDependency = (templateId: string) => {
+    setSelectedDependencies(prev => 
+      prev.includes(templateId) 
+        ? prev.filter(id => id !== templateId)
+        : [...prev, templateId]
+    );
+  };
+
   const handleAddTask = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
 
-    // --- Catch any lingering text in the input field! ---
     const finalSubTasks = [...subTasks];
     if (newSubTask.trim()) {
       finalSubTasks.push(newSubTask.trim());
@@ -55,17 +76,18 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
 
     setIsSubmitting(true);
     try {
-      // Create a master record in taskTemplates
+      // 1. Create a master record in taskTemplates
       const templateDocRef = await addDoc(collection(db, 'taskTemplates'), {
         title: title.trim(),
         color: color,
         taskType: taskType,
         subtasks: finalSubTasks,
-        isBroadcasted: !isTemplate, // Flag to identify broadcasted tasks vs standard templates
+        dependencies: selectedDependencies, // <-- ADDED
+        isBroadcasted: !isTemplate,
         createdAt: Date.now()
       });
 
-      // create the connected copies
+      // 2. Create the connected timeline copies (if broadcasting)
       if (!isTemplate) {
         const broadcastId = Date.now().toString();
 
@@ -78,6 +100,7 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
           status: 'incomplete',
           templateId: templateDocRef.id,
           broadcastId: broadcastId, 
+          dependencies: selectedDependencies // <-- ADDED
         };
 
         const targetGroups = taskType === 'team' 
@@ -103,6 +126,7 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
         }
       }
       
+      // Reset Form
       setTitle('');
       setIsTemplate(true);
       setTaskType('team');
@@ -110,6 +134,7 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
       setEndDate(dayjs().add(3, 'day').format('YYYY-MM-DD'));
       setSubTasks([]);
       setNewSubTask('');
+      setSelectedDependencies([]);
       onClose();
     } catch (error) {
       console.error("Error adding task: ", error);
@@ -159,11 +184,11 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
               <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">2. Assignment Type</p>
               <div className="flex gap-4">
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="radio" checked={taskType === 'team'} onChange={() => setTaskType('team')} className="w-4 h-4 text-blue-600 focus:ring-blue-500" />
+                  <input type="radio" checked={taskType === 'team'} onChange={() => setTaskType('team')} className="w-4 h-4 text-blue-600" />
                   <span className="text-sm font-medium text-gray-800">Team Task</span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="radio" checked={taskType === 'individual'} onChange={() => setTaskType('individual')} className="w-4 h-4 text-blue-600 focus:ring-blue-500" />
+                  <input type="radio" checked={taskType === 'individual'} onChange={() => setTaskType('individual')} className="w-4 h-4 text-blue-600" />
                   <span className="text-sm font-medium text-gray-800">Individual Task</span>
                 </label>
               </div>
@@ -173,23 +198,44 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
             <div className="space-y-4 pt-4 border-t border-gray-100">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Task Title</label>
-                <input type="text" value={title} onChange={e => setTitle(e.target.value)} className="w-full border border-gray-300 p-2 rounded focus:ring-blue-500 focus:border-blue-500 outline-none" required placeholder="e.g. Requirement Gathering" />
+                <input type="text" value={title} onChange={e => setTitle(e.target.value)} className="w-full border border-gray-300 p-2 rounded focus:ring-blue-500 outline-none" required placeholder="e.g. Requirement Gathering" />
               </div>
+
+              {/* NEW: PREREQUISITES SECTION */}
+              {existingTemplates.length > 0 && (
+                <div className="bg-orange-50 p-3 rounded border border-orange-100">
+                  <label className="block text-sm font-medium text-gray-800 mb-1">Prerequisites (Optional)</label>
+                  <p className="text-xs text-gray-600 mb-2">Select tasks that must be completed before this one.</p>
+                  <div className="max-h-32 overflow-y-auto space-y-1 bg-white border border-gray-200 rounded p-2">
+                    {existingTemplates.map(t => (
+                      <label key={t.id} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                        <input 
+                          type="checkbox" 
+                          checked={selectedDependencies.includes(t.id)}
+                          onChange={() => toggleDependency(t.id)}
+                          className="w-3 h-3 text-orange-600 rounded focus:ring-orange-500"
+                        />
+                        {t.title}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
               
               {!isTemplate && (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
-                    <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full border border-gray-300 p-2 rounded focus:ring-blue-500 focus:border-blue-500 outline-none" required={!isTemplate} />
+                    <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full border border-gray-300 p-2 rounded outline-none" required={!isTemplate} />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
-                    <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full border border-gray-300 p-2 rounded focus:ring-blue-500 focus:border-blue-500 outline-none" required={!isTemplate} />
+                    <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full border border-gray-300 p-2 rounded outline-none" required={!isTemplate} />
                   </div>
                 </div>
               )}
 
-              {/* NEW: SUB-TASKS SECTION */}
+              {/* SUB-TASKS SECTION */}
               <div className="bg-gray-50 p-3 rounded border border-gray-200">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Initial Sub-Tasks</label>
                 <ul className="space-y-2 mb-3">

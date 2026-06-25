@@ -1,94 +1,84 @@
-Master Project Blueprint: Serverless MYP Pacing LMS
 1. Project Overview & Constraints
+
 Purpose: A student self-pacing tracker and Learning Management System (LMS) tailored for the IB Middle Years Programme (MYP).
 
 Hosting & Architecture: 100% Serverless. Hosted on GitHub Pages.
 
-Tech Stack: React (TypeScript), Vite, React Router (using HashRouter for gh-pages compatibility), Tailwind CSS.
+Tech Stack: React (TypeScript), Vite, React Router (using HashRouter), Tailwind CSS.
 
-Backend / Database: Firebase (Google SSO Authentication, Firestore Database, Google Drive REST API (Centralized image storage)).
+Backend / Database: Firebase (Google SSO Authentication, Firestore Database, Google Drive REST API for file/image storage).
 
-Key UI Component: react-calendar-timeline heavily customized for a staggerable, drag-and-drop Gantt-style interface.
+Core UIs: 1. A staggerable, drag-and-drop Gantt-style Timeline (react-calendar-timeline).
+2. An interactive, dual-mode Engineering Journal (Editable forms for submissions vs. LaTeX-rendered document output).
 
-LaTeX Requirement: The app features an auto-generated Engineering Journal rendered directly in the browser using react-latex-next.
+2. Firestore Data Model (Updated)
 
-2. Firestore Data Model (Crucial Context)
-Because the app is serverless, the data model dictates both performance and security rules.
+Classes: { id, name, teacherId, term, driveFolderId }
 
-Classes: { id, name, teacherId, term }
+Users: { id, email, firstName, lastName, role: 'teacher' | 'student', classId, groupId, masterFolderId? }
 
-Users: { id, email, firstName, lastName, role: 'teacher' | 'student', classId } (Note: Students belong to one class only).
+Groups: { id, name, classId, memberIds: string[] }
 
-Groups: { id, name, classId, memberIds: string[] } (Assigned manually by the teacher after student import).
+TaskTemplates (Master Bank): { id, title, color, taskType: 'team' | 'individual', subtasks: string[], isBroadcasted: boolean, dependencies: string[] } (Dependencies array holds IDs of prerequisite tasks)
 
-Tasks (Master Templates): { id, classId, title, type: 'group' | 'individual', mypCriterion, mypLevelRange, defaultStartDate, defaultEndDate }
+TimelineItems (Active Tasks): { id, templateId, title, group (userId or teamId), start_time, end_time, status, taskType, dependencies: string[] }
 
-Subtasks (Master Templates): { id, taskId, title, content (markdown instructions), resources: url[] }
-
-TaskStates (Mutable Progress): { id, taskId, entityId (userId or groupId), status: 'incomplete' | 'in-progress' | 'complete', customStartDate, customEndDate }
-
-SubtaskStates: { id, subtaskId, userId, status, involvementLevel: number }
-
-Submissions: { id, subtaskId, userId, textResponse, imageUrls: string[], timestamp }
+Submissions (Journal Entries): { id, timelineItemId, userId, textResponse, imageUrls: string[], timestamp, lastEdited }
 
 Rubrics: { id, taskId, classId, criteriaData }
 
 3. Development Roadmap
+
 Phase 1: Environment & Infrastructure Setup
-Initialize the project using Vite (React + TypeScript).
 
-Install and configure react-router-dom using <HashRouter> to prevent 404 errors on GitHub Pages.
+Initialize React + Vite + TypeScript. Configure HashRouter.
 
-Set up Firebase via the Firebase Console: Enable Google Sign-In, Firestore, and Cloud Storage.
+Set up Firebase (Google SSO, Firestore).
 
-Configure .github/workflows/deploy.yml for automated GitHub Actions deployments to the gh-pages branch upon merging to main.
+Configure GitHub Actions for gh-pages deployment.
 
-Phase 2: Authentication & Onboarding
-Implement Firebase Google SSO Login. Route users based on their role (Teacher vs. Student).
+Phase 2: Authentication & Class Management
 
-Teacher CSV Import: Use papaparse to allow teachers to upload a CSV containing strictly FirstName, LastName, and Email. Perform a batch write to Firestore to create placeholder Users assigned to the teacher's classId.
+Firebase Google SSO Login. Route by role.
 
-Account Linking: Upon a student's first Google SSO login, check their Google email against the pre-loaded Firestore users. If a match exists, link the Auth ID to the existing profile.
+Teacher Class Management: Create classes, auto-generate Google Drive class folders.
 
-Group Management: Build a UI for teachers to create Groups and drag-and-drop enrolled students into them.
+Teacher CSV Import (papaparse) to preload student accounts.
 
-Phase 3: The Timeline UI (Core Engine)
-Install react-calendar-timeline, a date parser (e.g., dayjs), and set up Tailwind CSS.
+Group Management: Drag-and-drop UI to assign students to project groups.
 
-Configure the base timeline with stackItems={true} to prevent overlapping overlaps, centering visibleTimeStart and visibleTimeEnd on Date.now().
+Phase 3: The Timeline UI (Planning Engine)
 
-Custom Group Renderer: Replace the default left-hand Y-axis. For students, this displays their project group members. For teachers, it displays all students/groups.
+Implement react-calendar-timeline.
 
-Custom Item Renderer: Build a custom React component for the tasks on the X-axis. Style them as blocks with specific colors, radii, and mini-indicators for nested sub-tasks.
+Teacher View: See all groups and individual students. Ability to push/broadcast tasks globally.
 
-Drag & Drop Sync: Hook into onItemMove and onItemResize. When a student drags a block, update their specific TaskStates custom dates in Firestore (leaving the master task intact).
+Student View: See Team row and Personal row.
 
-Teacher can save tasks directly to the Master Timeline (with dates) OR save them as a "Template" to the taskTemplates Firebase collection (without dates).
+Task Dependencies: Visually indicate or logically enforce that a task cannot be started (or moved before) its prerequisite dependency.
 
-Phase 4: Modals, Interactions, & Submissions
+Phase 4: Task Bank & Modals
 
-Build a "Task Bank" UI for students to browse taskTemplates. Students can select a template, choose their own start/end dates, and push it to their personal timeline view.
+Task Bank: Students browse templates, claim tasks, and set target dates on their timeline.
 
-Task Summary Modal: Clicking a timeline block opens a modal listing sub-tasks and the overall completion status toggle.
+Task Summary Modal: Purely informational now. Clicking a block shows sub-tasks, prerequisite dependencies, and a "Jump to Journal" button.
 
-Sub-task Detail Modal: Clicking a sub-task opens instructions, resources, and an "Involvement Level" slider for that specific student.
-
-Submission Engine (Google Drive Integration): * Admin Setup: The teacher creates a master folder in their Google Drive, sets permissions to "Anyone with the link can edit" (or restricts strictly to student emails), and pastes the Folder ID into the app's Admin Panel.
-
-Auth Scopes: Update Firebase Google SSO to request the https://www.googleapis.com/auth/drive.file scope during student login.
-
-Upload Logic: Inside the sub-task modal, build a form allowing text entry (saved to Firestore) or image uploads. Image uploads will use the student's OAuth token to push the file directly into the teacher's designated Google Drive Folder ID via the Google Drive REST API. The resulting shared Drive URL is then saved to the Submissions document in Firestore.
-
-Visibility Logic: Implement read restrictions so students cannot view the contents or states of 'individual' tasks assigned to other group members.
+Note: Submissions have been completely removed from this phase and moved to Phase 6.
 
 Phase 5: MYP Assessment & Rubrics
-Build an Admin Panel for teachers to define MYP rubrics (Criteria A-D, Levels 1-8) and attach them to specific master Tasks.
 
-Build a read-only Student Dashboard to view accumulated rubrics and teacher feedback.
+Admin Panel for teachers to define MYP rubrics (Criteria A-D, Levels 1-8).
 
-Phase 6: LaTeX Engineering Journal Generation
-Create an aggregator function that queries Firestore for all completed tasks, sub-tasks, and form submissions belonging to a specific student.
+Attach rubrics to specific master tasks.
 
-Map this aggregated data into a cohesive Markdown/LaTeX string template structured by the teacher.
+Student Dashboard to view accumulated rubrics and feedback.
 
-Implement the /#/journal route and use react-latex-next to render the compiled text directly in the browser with full mathematical formatting support.
+Phase 6: The Engineering Journal (Execution Engine)
+
+Dual-Mode Interface: Implement an /journal route that toggles between "Edit Mode" and "Preview Mode".
+
+Edit Mode (Forms): Queries Firestore for all tasks currently on the student's timeline. Dynamically generates a continuous feed of form blocks for each active/uncompleted task.
+
+Google Drive Integration: Within these form blocks, students can type text and upload files. Uploads utilize the captured OAuth token to push files directly to the Teacher's Class Drive Folder.
+
+Preview Mode (LaTeX): An aggregator function compiles the saved form submissions and formats them into a cohesive Markdown/LaTeX string. Uses react-latex-next to render the final Engineering Journal in the browser with full mathematical formatting.
