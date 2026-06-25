@@ -1,6 +1,6 @@
 // src/context/AuthContext.tsx
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { type User as FirebaseUser, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
+import { type User as FirebaseUser, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, setDoc, collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import { auth, googleProvider, db } from '../config/firebase';
 
@@ -18,6 +18,8 @@ interface AuthContextType {
   user: AppUser | null;
   actualTeacherUser: AppUser | null;
   loading: boolean;
+  activeClassId: string | null;
+  setActiveClassId: (id: string | null) => void;
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   setViewAsStudent: (student: AppUser) => void;
@@ -30,6 +32,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [actualUser, setActualUser] = useState<AppUser | null>(null);
   const [viewingAsStudent, setViewingAsStudent] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activeClassId, setActiveClassId] = useState<string | null>(null);
 
   // The exposed user is either the spoofed student or the actual user
   const user = viewingAsStudent || actualUser;
@@ -109,12 +112,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const loginWithGoogle = async () => {
-    try {
-      await signInWithPopup(auth, googleProvider);
-    } catch (error) {
-      console.error("Error logging in with Google:", error);
+  try {
+    const result = await signInWithPopup(auth, googleProvider);
+    // Extract the Google Access Token
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    const token = credential?.accessToken;
+    
+    if (token) {
+      // Store it in sessionStorage so it persists across page reloads during the session
+      sessionStorage.setItem('google_access_token', token);
     }
-  };
+  } catch (error) {
+    console.error("Error logging in with Google:", error);
+  }
+};
 
   const logout = async () => {
     await signOut(auth);
@@ -129,7 +140,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <AuthContext.Provider value={{ 
       user, 
       actualTeacherUser,
-      loading, 
+      loading,
+      activeClassId,       
+      setActiveClassId,
       loginWithGoogle, 
       logout, 
       setViewAsStudent, 

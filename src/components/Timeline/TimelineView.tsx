@@ -32,10 +32,10 @@ export interface RoadmapItem {
 }
 
 const TimelineView: React.FC = () => {
-  const { user } = useAuth();
+  const { user, activeClassId } = useAuth();
   const [baseGroups, setBaseGroups] = useState<RoadmapGroup[]>([]);
   const [items, setItems] = useState<any[]>([]);
-  const [students, setStudents] = useState<AppUser[]>([]); // <-- Added to hold student data
+  const [students, setStudents] = useState<AppUser[]>([]);
   const [loading, setLoading] = useState(true);
   
   const [isPanelOpen, setIsPanelOpen] = useState(false);
@@ -45,8 +45,14 @@ const TimelineView: React.FC = () => {
   const defaultTimeEnd = dayjs().add(14, 'day').valueOf();
 
   useEffect(() => {
+    // Determine whose class we are looking at
+    const targetClassId = user?.role === 'teacher' ? activeClassId : user?.classId;
+    
+    // Wait until we have a class ID to avoid querying the whole database
+    if (!targetClassId) return;
+
     // 1. Listen to Groups
-    const qGroups = query(collection(db, 'groups'));
+    const qGroups = query(collection(db, 'groups'), where('classId', '==', targetClassId));
     const unsubscribeGroups = onSnapshot(qGroups, (snapshot) => {
       const fetchedGroups = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -57,7 +63,7 @@ const TimelineView: React.FC = () => {
     });
 
     // 2. Listen to Students (so we can get their names for the timeline)
-    const qUsers = query(collection(db, 'users'), where('role', '==', 'student'));
+    const qUsers = query(collection(db, 'users'), where('role', '==', 'student'), where('classId', '==', targetClassId));
     const unsubscribeUsers = onSnapshot(qUsers, (snapshot) => {
       setStudents(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as AppUser)));
     });
@@ -115,7 +121,7 @@ const TimelineView: React.FC = () => {
       unsubscribeUsers();
       unsubscribeItems();
     };
-  }, [user]);
+  }, [user, activeClassId]);
 
   // ROW FILTERING & MAPPING
   let renderedGroups: RoadmapGroup[] = [];

@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { DndContext, useDraggable, useDroppable, type DragEndEvent } from '@dnd-kit/core';
 import { collection, query, where, getDocs, addDoc, updateDoc, doc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { db } from '../../config/firebase';
-import { type AppUser } from '../../context/AuthContext';
+import { type AppUser, useAuth } from '../../context/AuthContext';
 
 // --- Helper Components for Drag and Drop ---
 
@@ -58,20 +58,19 @@ const GroupManagement: React.FC = () => {
   const [groups, setGroups] = useState<Group[]>([]);
   const [newGroupName, setNewGroupName] = useState('');
   const [loading, setLoading] = useState(true);
-
-  // Default class ID for now. In a full app, this would come from the Teacher's active class.
-  const CLASS_ID = 'default-class'; 
+  const { activeClassId } = useAuth();
 
   const fetchData = async () => {
+    if (!activeClassId) return; // Guard clause
     setLoading(true);
     try {
-      // 1. Fetch all students
-      const studentsQ = query(collection(db, 'users'), where('role', '==', 'student'));
+      // 1. Fetch only students in this specific class
+      const studentsQ = query(collection(db, 'users'), where('role', '==', 'student'), where('classId', '==', activeClassId));
       const studentDocs = await getDocs(studentsQ);
       const fetchedStudents = studentDocs.docs.map(d => ({ id: d.id, ...d.data() } as AppUser));
       
-      // 2. Fetch all groups for this class
-      const groupsQ = query(collection(db, 'groups'), where('classId', '==', CLASS_ID));
+      // 2. Fetch only groups for this specific class
+      const groupsQ = query(collection(db, 'groups'), where('classId', '==', activeClassId));
       const groupDocs = await getDocs(groupsQ);
       const fetchedGroups = groupDocs.docs.map(d => ({ id: d.id, ...d.data() } as Group));
 
@@ -82,20 +81,20 @@ const GroupManagement: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+};
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [activeClassId]);
 
   const handleCreateGroup = async (e: React.SyntheticEvent) => {
     e.preventDefault();
-    if (!newGroupName.trim()) return;
+    if (!newGroupName.trim() || !activeClassId) return;
 
     try {
       const groupData = {
         name: newGroupName.trim(),
-        classId: CLASS_ID,
+        classId: activeClassId,
         memberIds: [],
       };
       const docRef = await addDoc(collection(db, 'groups'), groupData);

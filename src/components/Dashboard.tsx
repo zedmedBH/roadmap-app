@@ -6,9 +6,11 @@ import GroupManagement from './Teacher/GroupManagement';
 import TimelineView from './Timeline/TimelineView';
 import StudentTaskBank from './Student/StudentTaskBank';
 import TeacherTaskBank from './Teacher/TeacherTaskBank';
+import TeacherSettings from './Teacher/TeacherSettings';
+import ClassManagement from './Teacher/ClassManagement';
 
 const Dashboard: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, activeClassId } = useAuth();
   
   return (
     <div className="space-y-6">
@@ -30,11 +32,23 @@ const Dashboard: React.FC = () => {
       {/* Show Teacher-specific features */}
       {user?.role === 'teacher' && (
         <div className="grid grid-cols-1 gap-6">
-          <StudentRosterImport />
-          <GroupManagement />
-          <TimelineView />
-          <TeacherTaskBank />
-        </div>
+    <TeacherSettings />
+    <ClassManagement />
+    
+    {/* Only show these if a class is actually selected! */}
+    {activeClassId ? (
+      <>
+        <StudentRosterImport />
+        <GroupManagement />
+        <TimelineView />
+        <TeacherTaskBank />
+      </>
+    ) : (
+      <div className="p-8 text-center text-gray-500 border-2 border-dashed border-gray-300 rounded-lg">
+        Create or select a class above to manage your roster, groups, and timeline.
+      </div>
+    )}
+  </div>
       )}
       
       {/* Show Student-specific features */}

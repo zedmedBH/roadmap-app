@@ -4,6 +4,7 @@ import Papa from 'papaparse';
 import { collection, doc, writeBatch } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { type AppUser } from '../../context/AuthContext';
+import { useAuth } from '../../context/AuthContext';
 
 interface CsvRow {
   firstName: string;
@@ -15,6 +16,7 @@ const StudentRosterImport: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const { activeClassId } = useAuth();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -56,7 +58,7 @@ const StudentRosterImport: React.FC = () => {
                 firstName: student.firstName.trim(),
                 lastName: student.lastName.trim(),
                 role: 'student',
-                // classId: 'some-class-id' // You can attach a class ID here later
+                classId: activeClassId || undefined
               };
               
               batch.set(newStudentRef, studentData);
