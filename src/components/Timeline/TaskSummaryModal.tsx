@@ -1,6 +1,6 @@
 // src/components/Timeline/TaskSummaryModal.tsx
 import React, { useState, useEffect } from 'react';
-import { doc, updateDoc, collection, addDoc, deleteDoc, onSnapshot, query, orderBy, getDocs, where, getDoc } from 'firebase/firestore';
+import { doc, updateDoc, collection, addDoc, deleteDoc, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { useAuth } from '../../context/AuthContext';
 
