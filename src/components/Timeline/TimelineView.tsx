@@ -3,9 +3,9 @@ import React, { useEffect, useState } from 'react';
 import Timeline from 'react-calendar-timeline';
 import 'react-calendar-timeline/style.css';
 import dayjs from 'dayjs';
-import { collection, onSnapshot, query, doc, updateDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, doc, updateDoc, where } from 'firebase/firestore';
 import { db } from '../../config/firebase';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth, type AppUser } from '../../context/AuthContext';
 import TaskPanel from './TaskPanel';
 import TaskSummaryModal from './TaskSummaryModal';
 
@@ -35,6 +35,7 @@ const TimelineView: React.FC = () => {
   const { user } = useAuth();
   const [baseGroups, setBaseGroups] = useState<RoadmapGroup[]>([]);
   const [items, setItems] = useState<any[]>([]);
+  const [students, setStudents] = useState<AppUser[]>([]); // <-- Added to hold student data
   const [loading, setLoading] = useState(true);
   
   const [isPanelOpen, setIsPanelOpen] = useState(false);
@@ -44,6 +45,7 @@ const TimelineView: React.FC = () => {
   const defaultTimeEnd = dayjs().add(14, 'day').valueOf();
 
   useEffect(() => {
+    // 1. Listen to Groups
     const qGroups = query(collection(db, 'groups'));
     const unsubscribeGroups = onSnapshot(qGroups, (snapshot) => {
       const fetchedGroups = snapshot.docs.map(doc => ({
@@ -54,6 +56,13 @@ const TimelineView: React.FC = () => {
       setBaseGroups(fetchedGroups);
     });
 
+    // 2. Listen to Students (so we can get their names for the timeline)
+    const qUsers = query(collection(db, 'users'), where('role', '==', 'student'));
+    const unsubscribeUsers = onSnapshot(qUsers, (snapshot) => {
+      setStudents(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as AppUser)));
+    });
+
+    // 3. Listen to Timeline Items
     const qItems = query(collection(db, 'timelineItems'));
     const unsubscribeItems = onSnapshot(qItems, (snapshot) => {
       const activeGroupId = user?.groupId || 'unassigned-team';
@@ -80,6 +89,7 @@ const TimelineView: React.FC = () => {
             status: data.status,
             taskType: data.taskType,
             templateId: data.templateId,
+            broadcastId: data.broadcastId,
             itemProps: {
               style: {
                 background: data.color || '#2196F3',
@@ -102,11 +112,12 @@ const TimelineView: React.FC = () => {
 
     return () => {
       unsubscribeGroups();
+      unsubscribeUsers();
       unsubscribeItems();
     };
   }, [user]);
 
-  // STUDENT ROW FILTERING
+  // ROW FILTERING & MAPPING
   let renderedGroups: RoadmapGroup[] = [];
 
   if (user?.role === 'student') {
@@ -127,14 +138,18 @@ const TimelineView: React.FC = () => {
       order: myTeam ? myTeam.order + 0.5 : 1
     });
   } else {
-    // Teacher View: Show all teams + floating personal rows
+    // Teacher View: Show all teams + floating personal rows mapped to names
     renderedGroups = [...baseGroups];
     const knownGroupIds = new Set(baseGroups.map(g => g.id));
     const extraGroups = new Map<string, string>();
     
     items.forEach(item => {
       if (!knownGroupIds.has(item.group)) {
-        extraGroups.set(item.group, `👤 Student Personal Task (ID: ${item.group.substring(0, 4)}...)`);
+        // Look up the student's name
+        const student = students.find(s => s.id === item.group);
+        const displayName = student ? `${student.firstName} ${student.lastName}` : `Unknown ID: ${item.group.substring(0, 4)}...`;
+        
+        extraGroups.set(item.group, `👤 ${displayName}`);
       }
     });
     

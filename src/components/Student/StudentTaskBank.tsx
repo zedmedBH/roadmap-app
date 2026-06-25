@@ -11,6 +11,7 @@ interface TaskTemplate {
   color: string;
   taskType?: 'team' | 'individual';
   subtasks?: string[];
+  isBroadcasted?: boolean;
 }
 
 const StudentTaskBank: React.FC = () => {
@@ -36,7 +37,9 @@ const StudentTaskBank: React.FC = () => {
           id: d.id,
           ...d.data()
         })) as TaskTemplate[];
-        setTemplates(fetchedTemplates);
+        
+        setTemplates(fetchedTemplates.filter(t => !t.isBroadcasted));
+        
         setLoading(false);
       }, (error) => {
         console.error("Error listening to task bank:", error);

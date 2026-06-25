@@ -230,50 +230,10 @@ const TaskSummaryModal: React.FC<TaskSummaryModalProps> = ({ isOpen, onClose, ta
         <div className="p-4 bg-gray-50 border-t flex justify-between items-center">
           <div>
             {user?.role === 'teacher' ? (
-              <button 
-                onClick={async () => {
-                  if (window.confirm("Are you sure you want to delete this task? If it was broadcasted, it will be removed for everyone.")) {
-                    setIsUpdating(true);
-                    try {
-                      const tasksToDelete = [];
-                      
-                      // 1. Gather all tasks that need to be deleted
-                      if (task.broadcastId) {
-                        // Find all copies of the broadcasted task
-                        const q = query(collection(db, 'timelineItems'), where('broadcastId', '==', task.broadcastId));
-                        const snap = await getDocs(q);
-                        snap.forEach(d => tasksToDelete.push(d));
-                      } else {
-                        // Just this single task
-                        const snap = await getDoc(doc(db, 'timelineItems', task.id));
-                        if (snap.exists()) tasksToDelete.push(snap);
-                      }
-
-                      // 2. Eradicate them and their subtasks
-                      for (const tDoc of tasksToDelete) {
-                        // Delete subtasks first to prevent orphaning
-                        const subQ = query(collection(db, 'timelineItems', tDoc.id, 'subtasks'));
-                        const subSnap = await getDocs(subQ);
-                        const deleteSubPromises = subSnap.docs.map(subDoc => deleteDoc(doc(db, 'timelineItems', tDoc.id, 'subtasks', subDoc.id)));
-                        await Promise.all(deleteSubPromises);
-                        
-                        // Delete the main task document
-                        await deleteDoc(doc(db, 'timelineItems', tDoc.id));
-                      }
-                      
-                      onClose();
-                    } catch (err) {
-                      console.error("Error deleting task:", err);
-                    } finally {
-                      setIsUpdating(false);
-                    }
-                  }
-                }}
-                className="px-4 py-2 text-red-600 bg-red-50 border border-red-200 rounded hover:bg-red-100 transition-colors font-medium text-sm"
-              >
-                Delete Permanently
-              </button>
-            ) : canEdit && task.templateId ? (
+              <p className="text-sm text-gray-500 font-medium italic pr-4">
+                To edit or delete this task globally, please use the Master Task Management panel on your dashboard.
+              </p>
+            ) : canEdit && task.templateId && !task.broadcastId ? ( // <-- Add && !task.broadcastId
               <button 
                 onClick={async () => {
                   if (window.confirm("Remove this task from the timeline? Your sub-task progress will be saved in the Task Bank.")) {
@@ -288,7 +248,7 @@ const TaskSummaryModal: React.FC<TaskSummaryModalProps> = ({ isOpen, onClose, ta
                     }
                   }
                 }}
-                className="px-4 py-2 text-orange-600 bg-orange-50 border border-orange-200 rounded hover:bg-orange-100 transition-colors font-medium text-sm"
+                className="px-4 py-2 text-orange-600 bg-orange-50 border border-orange-200 rounded hover:bg-orange-100 transition-colors font-medium text-sm whitespace-nowrap"
               >
                 Remove from Timeline
               </button>

@@ -5,6 +5,7 @@ import StudentRosterImport from './Teacher/StudentRosterImport';
 import GroupManagement from './Teacher/GroupManagement';
 import TimelineView from './Timeline/TimelineView';
 import StudentTaskBank from './Student/StudentTaskBank';
+import TeacherTaskBank from './Teacher/TeacherTaskBank';
 
 const Dashboard: React.FC = () => {
   const { user, logout } = useAuth();
@@ -32,7 +33,7 @@ const Dashboard: React.FC = () => {
           <StudentRosterImport />
           <GroupManagement />
           <TimelineView />
-          <StudentTaskBank />{/*Temporarily here while developing*/}
+          <TeacherTaskBank />
         </div>
       )}
       

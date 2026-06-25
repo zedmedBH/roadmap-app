@@ -47,7 +47,7 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
     e.preventDefault();
     if (!title.trim()) return;
 
-    // --- NEW: Catch any lingering text in the input field! ---
+    // --- Catch any lingering text in the input field! ---
     const finalSubTasks = [...subTasks];
     if (newSubTask.trim()) {
       finalSubTasks.push(newSubTask.trim());
@@ -55,15 +55,18 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
 
     setIsSubmitting(true);
     try {
-      if (isTemplate) {
-        await addDoc(collection(db, 'taskTemplates'), {
-          title: title.trim(),
-          color: color,
-          taskType: taskType,
-          subtasks: finalSubTasks, // Use the finalized array
-          createdAt: Date.now()
-        });
-      } else {
+      // Create a master record in taskTemplates
+      const templateDocRef = await addDoc(collection(db, 'taskTemplates'), {
+        title: title.trim(),
+        color: color,
+        taskType: taskType,
+        subtasks: finalSubTasks,
+        isBroadcasted: !isTemplate, // Flag to identify broadcasted tasks vs standard templates
+        createdAt: Date.now()
+      });
+
+      // create the connected copies
+      if (!isTemplate) {
         const broadcastId = Date.now().toString();
 
         const baseTaskData = {
@@ -73,7 +76,8 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
           color: color,
           taskType: taskType,
           status: 'incomplete',
-          broadcastId: broadcastId,
+          templateId: templateDocRef.id,
+          broadcastId: broadcastId, 
         };
 
         const targetGroups = taskType === 'team' 
@@ -86,13 +90,11 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
             ...target
           });
 
-          // Use the finalized array here too
           if (finalSubTasks.length > 0) {
             const subTaskPromises = finalSubTasks.map((st, index) => 
               addDoc(collection(db, 'timelineItems', docRef.id, 'subtasks'), {
                 title: st,
                 completed: false,
-                // Add index to guarantee unique ordering
                 createdAt: Date.now() + index 
               })
             );
@@ -101,14 +103,13 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
         }
       }
       
-      // Reset form
       setTitle('');
       setIsTemplate(true);
       setTaskType('team');
       setStartDate(dayjs().format('YYYY-MM-DD'));
       setEndDate(dayjs().add(3, 'day').format('YYYY-MM-DD'));
       setSubTasks([]);
-      setNewSubTask(''); // Don't forget to clear the input!
+      setNewSubTask('');
       onClose();
     } catch (error) {
       console.error("Error adding task: ", error);
