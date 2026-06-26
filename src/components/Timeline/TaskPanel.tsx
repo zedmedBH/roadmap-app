@@ -11,7 +11,6 @@ interface TaskPanelProps {
   groups: { id: string; title: string }[];
 }
 
-// Rubric Interfaces
 interface RubricBand {
   levels: string;
   officialDescriptor: string;
@@ -25,6 +24,11 @@ interface RubricStrand {
   strand: string;
   title: string;
   bands: RubricBand[];
+}
+
+interface SelectedRubric {
+  id: string;
+  maxBand: number;
 }
 
 const TASK_COLORS = [
@@ -45,31 +49,25 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
   const [endDate, setEndDate] = useState(dayjs().add(3, 'day').format('YYYY-MM-DD'));
   const [color, setColor] = useState(TASK_COLORS[0].value);
   
-  // Sub-Tasks State
   const [subTasks, setSubTasks] = useState<string[]>([]);
   const [newSubTask, setNewSubTask] = useState('');
   
-  // Dependencies State
   const [existingTemplates, setExistingTemplates] = useState<{id: string, title: string}[]>([]);
   const [selectedDependencies, setSelectedDependencies] = useState<string[]>([]);
 
-  // NEW: Rubrics State
   const [rubricBank, setRubricBank] = useState<RubricStrand[]>([]);
-  const [selectedRubricIds, setSelectedRubricIds] = useState<string[]>([]);
+  const [selectedRubrics, setSelectedRubrics] = useState<SelectedRubric[]>([]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Fetch existing templates AND rubric bank
   useEffect(() => {
     if (!isOpen || !user) return;
     
-    // 1. Fetch Task Templates for Prerequisites
     const qTemplates = query(collection(db, 'taskTemplates'));
     const unsubTemplates = onSnapshot(qTemplates, (snap) => {
       setExistingTemplates(snap.docs.map(d => ({ id: d.id, title: d.data().title })));
     });
 
-    // 2. Fetch Teacher's Rubric Bank
     const qRubrics = query(collection(db, 'rubricBank'));
     const unsubRubrics = onSnapshot(qRubrics, (snap) => {
       const fetchedRubrics = snap.docs.map(d => ({ id: d.id, ...d.data() } as RubricStrand));
@@ -103,11 +101,15 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
   };
 
   const toggleRubric = (rubricId: string) => {
-    setSelectedRubricIds(prev => 
-      prev.includes(rubricId) 
-        ? prev.filter(id => id !== rubricId)
-        : [...prev, rubricId]
+    setSelectedRubrics(prev => 
+      prev.some(r => r.id === rubricId)
+        ? prev.filter(r => r.id !== rubricId)
+        : [...prev, { id: rubricId, maxBand: 8 }] // Default to max 8
     );
+  };
+
+  const updateMaxBand = (rubricId: string, maxBand: number) => {
+    setSelectedRubrics(prev => prev.map(r => r.id === rubricId ? { ...r, maxBand } : r));
   };
 
   const handleAddTask = async (e: React.SyntheticEvent) => {
@@ -119,26 +121,30 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
       finalSubTasks.push(newSubTask.trim());
     }
 
-    // Extract the FULL rubric data to embed in the task template
     const selectedStrandsToEmbed = rubricBank
-      .filter(r => selectedRubricIds.includes(r.id))
-      .map(({ id, teacherId, ...rest }) => rest); // Omit IDs for the embedded version
+      .filter(r => selectedRubrics.some(sr => sr.id === r.id))
+      .map(({ id, teacherId, ...rest }) => {
+        const selection = selectedRubrics.find(sr => sr.id === id);
+        return { 
+          ...rest, 
+          originalRubricId: id, 
+          maxBand: selection?.maxBand || 8 
+        };
+      });
 
     setIsSubmitting(true);
     try {
-      // 1. Create a master record in taskTemplates
       const templateDocRef = await addDoc(collection(db, 'taskTemplates'), {
         title: title.trim(),
         color: color,
         taskType: taskType,
         subtasks: finalSubTasks,
         dependencies: selectedDependencies,
-        rubricStrands: selectedStrandsToEmbed, // <-- ADDED: Embedded Rubrics
+        rubricStrands: selectedStrandsToEmbed,
         isBroadcasted: !isTemplate,
         createdAt: Date.now()
       });
 
-      // 2. Create the connected timeline copies (if broadcasting)
       if (!isTemplate) {
         const broadcastId = Date.now().toString();
 
@@ -151,7 +157,8 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
           status: 'incomplete',
           templateId: templateDocRef.id,
           broadcastId: broadcastId, 
-          dependencies: selectedDependencies 
+          dependencies: selectedDependencies,
+          rubricStrands: selectedStrandsToEmbed 
         };
 
         const targetGroups = taskType === 'team' 
@@ -177,7 +184,6 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
         }
       }
       
-      // Reset Form
       setTitle('');
       setIsTemplate(true);
       setTaskType('team');
@@ -186,7 +192,7 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
       setSubTasks([]);
       setNewSubTask('');
       setSelectedDependencies([]);
-      setSelectedRubricIds([]); // <-- Reset Rubrics
+      setSelectedRubrics([]); 
       onClose();
     } catch (error) {
       console.error("Error adding task: ", error);
@@ -253,26 +259,50 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
                 <input type="text" value={title} onChange={e => setTitle(e.target.value)} className="w-full border border-gray-300 p-2 rounded focus:ring-blue-500 outline-none" required placeholder="e.g. Requirement Gathering" />
               </div>
 
-              {/* NEW: ASSESSMENT CRITERIA SECTION */}
+              {/* ASSESSMENT CRITERIA & MAX BANDS SECTION */}
               {rubricBank.length > 0 && (
                 <div className="bg-purple-50 p-3 rounded border border-purple-100">
                   <label className="block text-sm font-medium text-purple-900 mb-1">Assessment Criteria (Optional)</label>
-                  <p className="text-xs text-purple-700 mb-2">Select rubric strands to attach to this task.</p>
-                  <div className="max-h-32 overflow-y-auto space-y-1 bg-white border border-purple-200 rounded p-2">
-                    {rubricBank.map(r => (
-                      <label key={r.id} className="flex items-start gap-2 text-sm text-gray-700 cursor-pointer hover:bg-gray-50 p-1.5 rounded">
-                        <input 
-                          type="checkbox" 
-                          checked={selectedRubricIds.includes(r.id)}
-                          onChange={() => toggleRubric(r.id)}
-                          className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500 mt-0.5"
-                        />
-                        <div className="flex flex-col">
-                          <span className="font-semibold text-purple-700 leading-tight">Crit {r.criterion}.{r.strand}</span>
-                          <span className="text-xs text-gray-500">{r.title}</span>
+                  <p className="text-xs text-purple-700 mb-2">Select rubric strands and max possible achievement bands.</p>
+                  <div className="max-h-48 overflow-y-auto space-y-1 bg-white border border-purple-200 rounded p-2">
+                    {rubricBank.map(r => {
+                      const isSelected = selectedRubrics.some(sr => sr.id === r.id);
+                      const selectedData = selectedRubrics.find(sr => sr.id === r.id);
+                      
+                      return (
+                        <div key={r.id} className={`flex flex-col gap-2 text-sm text-gray-700 hover:bg-gray-50 p-2 rounded border ${isSelected ? 'border-purple-200 bg-purple-50/30' : 'border-transparent'}`}>
+                          <label className="flex items-start gap-2 cursor-pointer">
+                            <input 
+                              type="checkbox" 
+                              checked={isSelected}
+                              onChange={() => toggleRubric(r.id)}
+                              className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500 mt-0.5"
+                            />
+                            <div className="flex flex-col">
+                              <span className="font-semibold text-purple-700 leading-tight">Crit {r.criterion}.{r.strand}</span>
+                              <span className="text-xs text-gray-500">{r.title}</span>
+                            </div>
+                          </label>
+                          
+                          {/* Max Band Dropdown - Only shows if Rubric is selected */}
+                          {isSelected && (
+                            <div className="ml-6 flex items-center gap-2">
+                              <span className="text-xs font-semibold text-gray-500 uppercase">Max Band:</span>
+                              <select 
+                                value={selectedData?.maxBand || 8}
+                                onChange={(e) => updateMaxBand(r.id, parseInt(e.target.value))}
+                                className="text-xs border border-purple-300 rounded p-1 outline-none focus:border-purple-500 bg-white"
+                              >
+                                <option value={2}>1-2</option>
+                                <option value={4}>3-4</option>
+                                <option value={6}>5-6</option>
+                                <option value={8}>7-8</option>
+                              </select>
+                            </div>
+                          )}
                         </div>
-                      </label>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}

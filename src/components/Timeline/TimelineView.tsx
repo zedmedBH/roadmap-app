@@ -29,7 +29,8 @@ export interface RoadmapItem {
   teamId?: string;
   templateId?: string;
   unclaimed?: boolean;
-  broadcastId?: string; 
+  broadcastId?: string;
+  rubricStrands?: any[];
 }
 
 const TimelineView: React.FC = () => {
@@ -90,6 +91,7 @@ const TimelineView: React.FC = () => {
             taskType: data.taskType,
             templateId: data.templateId,
             broadcastId: data.broadcastId,
+            rubricStrands: data.rubricStrands,
             // Explicitly set permissions here so the library disables the cursor natively
             canMove: !isMasterTaskForStudent,
             canResize: !isMasterTaskForStudent ? 'both' : false,

@@ -9,6 +9,7 @@ import TeacherTaskBank from './Teacher/TeacherTaskBank';
 import TeacherSettings from './Teacher/TeacherSettings';
 import ClassManagement from './Teacher/ClassManagement';
 import TeacherRubricBank from './Teacher/TeacherRubricBank';
+import TeacherJournalReview from './Teacher/TeacherJournalReview';
 
 const Dashboard: React.FC = () => {
   const { user, logout, activeClassId } = useAuth();
@@ -44,6 +45,7 @@ const Dashboard: React.FC = () => {
         <TimelineView />
         <TeacherTaskBank />
         <TeacherRubricBank />
+        <TeacherJournalReview />
       </>
     ) : (
       <div className="p-8 text-center text-gray-500 border-2 border-dashed border-gray-300 rounded-lg">

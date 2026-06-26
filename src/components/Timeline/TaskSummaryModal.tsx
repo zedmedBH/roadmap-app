@@ -161,7 +161,34 @@ const TaskSummaryModal: React.FC<TaskSummaryModalProps> = ({ isOpen, onClose, ta
               </ul>
             </div>
           </div>
-          
+          {/* Assessment Criteria (Read Only) */}
+          {task.rubricStrands && task.rubricStrands.length > 0 && (
+            <div>
+              <h4 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-2">Assessment Criteria</h4>
+              <div className="space-y-3">
+                {task.rubricStrands.map((r: any) => (
+                  <div key={`${r.criterion}.${r.strand}`} className="bg-purple-50 border border-purple-100 rounded-lg p-4">
+                    <div className="flex justify-between items-center mb-2 border-b border-purple-100 pb-2">
+                      <span className="font-bold text-purple-800">Criterion {r.criterion}.{r.strand}</span>
+                      <span className="text-xs font-bold text-purple-600 bg-purple-100 px-2 py-1 rounded-full">
+                        Max Band: {r.maxBand || 8}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-700 font-medium mb-3">{r.title}</p>
+                    
+                    <div className="space-y-2">
+                      {r.bands.filter((b: any) => parseInt(b.levels.split('-')[1]) <= (r.maxBand || 8)).map((band: any) => (
+                        <div key={band.levels} className="bg-white border border-purple-100 rounded p-2 flex gap-3">
+                          <span className="font-bold text-purple-600 text-sm w-8 shrink-0">{band.levels}</span>
+                          <span className="text-xs text-gray-600">{band.studentExemplar || band.officialDescriptor}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg flex justify-between items-center">
             <p className="text-sm text-blue-800">Ready to work on this task?</p>
             <button className="bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700 font-medium text-sm">
