@@ -6,6 +6,7 @@ import { db } from './config/firebase';
 import { AuthProvider, useAuth, type AppUser } from './context/AuthContext';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
+import EngineeringJournal from './components/Journal/EngineeringJournal';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
@@ -90,7 +91,7 @@ function AppRoutes() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-          <Route path="/journal" element={<ProtectedRoute><div>Engineering Journal (LaTeX) - Coming Soon</div></ProtectedRoute>} />
+          <Route path="/journal" element={<ProtectedRoute><EngineeringJournal /></ProtectedRoute>} />
         </Routes>
       </main>
     </div>

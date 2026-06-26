@@ -225,26 +225,28 @@ const TimelineView: React.FC = () => {
               const isMasterTaskForStudent = user?.role === 'student' && !item.userId;
               const isIndividual = item.taskType === 'individual';
 
+              const { key, ...restItemProps } = getItemProps({
+                style: {
+                  background: item.itemProps?.style?.background || '#2196F3',
+                  color: 'white',
+                  borderRadius: '4px',
+                  border: isMasterTaskForStudent ? '2px dashed rgba(255,255,255,0.6)' : 'none',
+                  opacity: isMasterTaskForStudent ? 0.7 : 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '0 8px 0 8px', 
+                  overflow: 'hidden',
+                  backgroundImage: isIndividual 
+                    ? 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.1) 10px, rgba(255,255,255,0.1) 20px)' 
+                    : 'none'
+                }
+              });
+
               return (
                 <div
-                  {...getItemProps({
-                    style: {
-                      background: item.itemProps?.style?.background || '#2196F3',
-                      color: 'white',
-                      borderRadius: '4px',
-                      border: isMasterTaskForStudent ? '2px dashed rgba(255,255,255,0.6)' : 'none',
-                      opacity: isMasterTaskForStudent ? 0.7 : 1,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      // Increased right padding to 24px to clear the absolute resize handle
-                      padding: '0 8px 0 8px', 
-                      overflow: 'hidden',
-                      backgroundImage: isIndividual 
-                        ? 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.1) 10px, rgba(255,255,255,0.1) 20px)' 
-                        : 'none'
-                    }
-                  })}
+                  key={key}
+                  {...restItemProps}
                 >
                   {/* Left Resize Handle (Added w-3 and z-20) */}
                   {itemContext.useResizeHandle ? <div {...leftResizeProps} className="!w-3 h-full absolute left-0 cursor-ew-resize hover:bg-white/30 z-20" /> : null}

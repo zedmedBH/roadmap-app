@@ -67,11 +67,11 @@ Note: Submissions have been completely removed from this phase and moved to Phas
 
 Phase 5: MYP Assessment & Rubrics
 
-Admin Panel for teachers to define MYP rubrics (Criteria A-D, Levels 1-8).
+TeacherRubricBank: Admin panel for teachers to define reusable, strand-level MYP rubrics (Criteria A-D, Strands i-iv) with official descriptors and student-friendly exemplars.
 
-Attach rubrics to specific master tasks.
+Update TaskPanel: Allow teachers to attach specific rubric strands to Master Tasks.
 
-Student Dashboard to view accumulated rubrics and feedback.
+Update TaskSummaryModal: Display attached rubrics to students when viewing task details.
 
 Phase 6: The Engineering Journal (Execution Engine)
 
@@ -82,3 +82,11 @@ Edit Mode (Forms): Queries Firestore for all tasks currently on the student's ti
 Google Drive Integration: Within these form blocks, students can type text and upload files. Uploads utilize the captured OAuth token to push files directly to the Teacher's Class Drive Folder.
 
 Preview Mode (LaTeX): An aggregator function compiles the saved form submissions and formats them into a cohesive Markdown/LaTeX string. Uses react-latex-next to render the final Engineering Journal in the browser with full mathematical formatting.
+
+Phase 7: Assessment & Feedback
+
+Teacher Journal Viewer: A new interface (e.g., TeacherJournalReview.tsx) where a teacher can select a student from their roster and view that student's compiled Preview document.
+
+Interactive Grading: Alongside the student's journal, we render the rubric strands attached to their completed tasks. The teacher can simply click a band (e.g., the "5-6" box) to lock in a score.
+
+Student Feedback Dashboard: Update the student's view so they can see their achieved scores and read any feedback the teacher left.

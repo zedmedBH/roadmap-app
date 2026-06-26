@@ -1,13 +1,30 @@
 // src/components/Timeline/TaskPanel.tsx
 import React, { useState, useEffect } from 'react';
-import { collection, addDoc, getDocs, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../config/firebase';
+import { useAuth } from '../../context/AuthContext';
 import dayjs from 'dayjs';
 
 interface TaskPanelProps {
   isOpen: boolean;
   onClose: () => void;
   groups: { id: string; title: string }[];
+}
+
+// Rubric Interfaces
+interface RubricBand {
+  levels: string;
+  officialDescriptor: string;
+  studentExemplar: string;
+}
+
+interface RubricStrand {
+  id: string;
+  teacherId?: string;
+  criterion: string;
+  strand: string;
+  title: string;
+  bands: RubricBand[];
 }
 
 const TASK_COLORS = [
@@ -19,6 +36,8 @@ const TASK_COLORS = [
 ];
 
 const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
+  const { user } = useAuth();
+  
   const [title, setTitle] = useState('');
   const [isTemplate, setIsTemplate] = useState(true); 
   const [taskType, setTaskType] = useState<'team' | 'individual'>('team');
@@ -30,21 +49,39 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
   const [subTasks, setSubTasks] = useState<string[]>([]);
   const [newSubTask, setNewSubTask] = useState('');
   
-  // NEW: Dependencies State
+  // Dependencies State
   const [existingTemplates, setExistingTemplates] = useState<{id: string, title: string}[]>([]);
   const [selectedDependencies, setSelectedDependencies] = useState<string[]>([]);
 
+  // NEW: Rubrics State
+  const [rubricBank, setRubricBank] = useState<RubricStrand[]>([]);
+  const [selectedRubricIds, setSelectedRubricIds] = useState<string[]>([]);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Fetch existing templates to populate the Prerequisites list
+  // Fetch existing templates AND rubric bank
   useEffect(() => {
-    if (!isOpen) return;
-    const q = query(collection(db, 'taskTemplates'));
-    const unsubscribe = onSnapshot(q, (snap) => {
+    if (!isOpen || !user) return;
+    
+    // 1. Fetch Task Templates for Prerequisites
+    const qTemplates = query(collection(db, 'taskTemplates'));
+    const unsubTemplates = onSnapshot(qTemplates, (snap) => {
       setExistingTemplates(snap.docs.map(d => ({ id: d.id, title: d.data().title })));
     });
-    return () => unsubscribe();
-  }, [isOpen]);
+
+    // 2. Fetch Teacher's Rubric Bank
+    const qRubrics = query(collection(db, 'rubricBank'));
+    const unsubRubrics = onSnapshot(qRubrics, (snap) => {
+      const fetchedRubrics = snap.docs.map(d => ({ id: d.id, ...d.data() } as RubricStrand));
+      fetchedRubrics.sort((a, b) => a.criterion.localeCompare(b.criterion) || a.strand.localeCompare(b.strand));
+      setRubricBank(fetchedRubrics);
+    });
+
+    return () => {
+      unsubTemplates();
+      unsubRubrics();
+    };
+  }, [isOpen, user]);
 
   const handleAddSubTask = () => {
     if (newSubTask.trim()) {
@@ -65,6 +102,14 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
     );
   };
 
+  const toggleRubric = (rubricId: string) => {
+    setSelectedRubricIds(prev => 
+      prev.includes(rubricId) 
+        ? prev.filter(id => id !== rubricId)
+        : [...prev, rubricId]
+    );
+  };
+
   const handleAddTask = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
@@ -74,6 +119,11 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
       finalSubTasks.push(newSubTask.trim());
     }
 
+    // Extract the FULL rubric data to embed in the task template
+    const selectedStrandsToEmbed = rubricBank
+      .filter(r => selectedRubricIds.includes(r.id))
+      .map(({ id, teacherId, ...rest }) => rest); // Omit IDs for the embedded version
+
     setIsSubmitting(true);
     try {
       // 1. Create a master record in taskTemplates
@@ -82,7 +132,8 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
         color: color,
         taskType: taskType,
         subtasks: finalSubTasks,
-        dependencies: selectedDependencies, // <-- ADDED
+        dependencies: selectedDependencies,
+        rubricStrands: selectedStrandsToEmbed, // <-- ADDED: Embedded Rubrics
         isBroadcasted: !isTemplate,
         createdAt: Date.now()
       });
@@ -100,7 +151,7 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
           status: 'incomplete',
           templateId: templateDocRef.id,
           broadcastId: broadcastId, 
-          dependencies: selectedDependencies // <-- ADDED
+          dependencies: selectedDependencies 
         };
 
         const targetGroups = taskType === 'team' 
@@ -135,6 +186,7 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
       setSubTasks([]);
       setNewSubTask('');
       setSelectedDependencies([]);
+      setSelectedRubricIds([]); // <-- Reset Rubrics
       onClose();
     } catch (error) {
       console.error("Error adding task: ", error);
@@ -201,7 +253,31 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
                 <input type="text" value={title} onChange={e => setTitle(e.target.value)} className="w-full border border-gray-300 p-2 rounded focus:ring-blue-500 outline-none" required placeholder="e.g. Requirement Gathering" />
               </div>
 
-              {/* NEW: PREREQUISITES SECTION */}
+              {/* NEW: ASSESSMENT CRITERIA SECTION */}
+              {rubricBank.length > 0 && (
+                <div className="bg-purple-50 p-3 rounded border border-purple-100">
+                  <label className="block text-sm font-medium text-purple-900 mb-1">Assessment Criteria (Optional)</label>
+                  <p className="text-xs text-purple-700 mb-2">Select rubric strands to attach to this task.</p>
+                  <div className="max-h-32 overflow-y-auto space-y-1 bg-white border border-purple-200 rounded p-2">
+                    {rubricBank.map(r => (
+                      <label key={r.id} className="flex items-start gap-2 text-sm text-gray-700 cursor-pointer hover:bg-gray-50 p-1.5 rounded">
+                        <input 
+                          type="checkbox" 
+                          checked={selectedRubricIds.includes(r.id)}
+                          onChange={() => toggleRubric(r.id)}
+                          className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500 mt-0.5"
+                        />
+                        <div className="flex flex-col">
+                          <span className="font-semibold text-purple-700 leading-tight">Crit {r.criterion}.{r.strand}</span>
+                          <span className="text-xs text-gray-500">{r.title}</span>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* PREREQUISITES SECTION */}
               {existingTemplates.length > 0 && (
                 <div className="bg-orange-50 p-3 rounded border border-orange-100">
                   <label className="block text-sm font-medium text-gray-800 mb-1">Prerequisites (Optional)</label>
