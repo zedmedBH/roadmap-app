@@ -32,7 +32,7 @@ const TeacherJournalReview: React.FC = () => {
   const [tasks, setTasks] = useState<TimelineTask[]>([]);
   const [submissions, setSubmissions] = useState<Record<string, Submission>>({});
   
-  const [savedFeedbacks, setSavedFeedbacks] = useState<Record<string, FeedbackState>>({});
+  //const [savedFeedbacks, setSavedFeedbacks] = useState<Record<string, FeedbackState>>({});
   const [draftFeedbacks, setDraftFeedbacks] = useState<Record<string, FeedbackState>>({});
   
   const [loadingStudent, setLoadingStudent] = useState(false);
@@ -55,7 +55,7 @@ const TeacherJournalReview: React.FC = () => {
     if (!selectedStudentId) {
       setTasks([]);
       setSubmissions({});
-      setSavedFeedbacks({});
+      //setSavedFeedbacks({});
       setDraftFeedbacks({});
       return;
     }
@@ -104,7 +104,7 @@ const TeacherJournalReview: React.FC = () => {
             comment: data.comment || ''
           };
         });
-        setSavedFeedbacks(fb);
+        //setSavedFeedbacks(fb);
         setDraftFeedbacks(fb); 
         setLoadingStudent(false);
       });
