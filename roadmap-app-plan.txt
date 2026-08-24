@@ -1,92 +1,60 @@
 1. Project Overview & Constraints
-
 Purpose: A student self-pacing tracker and Learning Management System (LMS) tailored for the IB Middle Years Programme (MYP).
-
 Hosting & Architecture: 100% Serverless. Hosted on GitHub Pages.
-
 Tech Stack: React (TypeScript), Vite, React Router (using HashRouter), Tailwind CSS.
-
 Backend / Database: Firebase (Google SSO Authentication, Firestore Database, Google Drive REST API for file/image storage).
 
-Core UIs: 1. A staggerable, drag-and-drop Gantt-style Timeline (react-calendar-timeline).
-2. An interactive, dual-mode Engineering Journal (Editable forms for submissions vs. LaTeX-rendered document output).
+2. Firestore Data Model & Security (RBAC)
+Security Rules: Strict RBAC implemented. Teachers have global write access to classes, groups, and master banks. Students only have write access to their own profile, their claimed timeline tasks, and their journal submissions. Reads require authentication.
 
-2. Firestore Data Model (Updated)
-
+Schema:
 Classes: { id, name, teacherId, term, driveFolderId }
-
-Users: { id, email, firstName, lastName, role: 'teacher' | 'student', classId, groupId, masterFolderId? }
-
+Users: { id, email, firstName, lastName, role: 'teacher' | 'student', classId, groupId, masterFolderId?, studentFolderId?, githubRepo? }
 Groups: { id, name, classId, memberIds: string[] }
-
-TaskTemplates (Master Bank): { id, title, color, taskType: 'team' | 'individual', subtasks: string[], isBroadcasted: boolean, dependencies: string[] } (Dependencies array holds IDs of prerequisite tasks)
-
-TimelineItems (Active Tasks): { id, templateId, title, group (userId or teamId), start_time, end_time, status, taskType, dependencies: string[] }
-
+TaskTemplates (Master Bank): { id, title, color, taskType: 'team' | 'individual', subtasks: string[], isBroadcasted: boolean, dependencies: string[], rubricStrands: any[] } 
+TimelineItems (Active Tasks): { id, templateId, title, group (userId or teamId), start_time, end_time, status, taskType, dependencies: string[], unclaimed: boolean, rubricStrands: any[] }
 Submissions (Journal Entries): { id, timelineItemId, userId, textResponse, imageUrls: string[], timestamp, lastEdited }
+Rubrics: { id, teacherId, criterion, strand, title, bands: Array<{levels, officialDescriptor, studentExemplar}> }
+Feedback: { id, timelineItemId, userId, teacherId, scores: Record<string, number>, comment: string, updatedAt: number }
 
-Rubrics: { id, taskId, classId, criteriaData }
+3. UI/UX Architecture & Routing
+Navigation (<Navigation />): Global top bar handling Google SSO logout, dynamic Welcome messages, and a Teacher "View as Student" spoofing dropdown.
+Teacher Dashboard: Tabbed interface hiding complex menus. Tabs include:
+  1. Master Roadmap (TimelineView)
+  2. Journal Grading (TeacherJournalReview)
+  3. Task & Rubric Banks (TeacherTaskBank, TeacherRubricBank)
+  4. Class Setup & Admin (ClassManagement, TeacherSettings, StudentRosterImport, GroupManagement)
+Student Dashboard: Unified view containing a prominent "Open Journal" banner, their TimelineView, and the StudentTaskBank.
 
-3. Development Roadmap
+4. Development Roadmap & Implementation Status
+Phase 1: Environment & Infrastructure (Completed)
+React + Vite + TypeScript. HashRouter for gh-pages. Firebase SSO & Firestore integrated. RBAC secured.
 
-Phase 1: Environment & Infrastructure Setup
+Phase 2: Authentication & Class Management (Completed)
+- TeacherSettings: Stores Google Drive Master Folder ID with a visual verification badge.
+- StudentRosterImport: Real-time roster view allowing manual single-adds, bulk CSV imports (Papaparse), and instant student dropping.
+- GroupManagement: Drag-and-drop UI (@dnd-kit/core) assigning students to project groups.
 
-Initialize React + Vite + TypeScript. Configure HashRouter.
+Phase 3: The Timeline UI (Planning Engine) (Completed)
+- react-calendar-timeline integration.
+- Teacher View: Broadcasts tasks globally.
+- Student View: Unified view rendering a "Team" row and "Personal Tasks" row dynamically based on taskType. Students have full resize/move permissions over personal tasks; broadcasted tasks are locked.
 
-Set up Firebase (Google SSO, Firestore).
+Phase 4: Task Bank & Modals (Completed)
+- TeacherTaskBank: Manage master tasks, cascade edits globally, and push new tasks via the embedded TaskPanel.
+- StudentTaskBank: Browse un-broadcasted templates. Smart claiming enforces prerequisite dependencies before allowing a task to be added to the timeline.
+- TaskSummaryModal: Allows students to check off subtasks, view rubrics, change status, and click an explicit "Open Engineering Journal" routing button.
 
-Configure GitHub Actions for gh-pages deployment.
+Phase 5: MYP Assessment & Rubrics (Completed)
+- TeacherRubricBank: Admin panel creating reusable Criteria A-D strands.
+- Tasks embed these rubrics, capping max achievement bands directly in the TaskPanel.
 
-Phase 2: Authentication & Class Management
+Phase 6: The Engineering Journal (Execution Engine) (Completed)
+- Editable GitHub Repo link stored on the user document.
+- Dual-Mode Interface: Toggles between Edit Mode (continuous feed of active task forms) and Preview Mode (LaTeX aggregated markdown).
+- File Uploads: Captures OAuth token to push image uploads to the Teacher's Master Drive Folder, storing the returned webViewLink in the submission.
+- react-latex-next compiles mathematical formatting dynamically.
 
-Firebase Google SSO Login. Route by role.
-
-Teacher Class Management: Create classes, auto-generate Google Drive class folders.
-
-Teacher CSV Import (papaparse) to preload student accounts.
-
-Group Management: Drag-and-drop UI to assign students to project groups.
-
-Phase 3: The Timeline UI (Planning Engine)
-
-Implement react-calendar-timeline.
-
-Teacher View: See all groups and individual students. Ability to push/broadcast tasks globally.
-
-Student View: See Team row and Personal row.
-
-Task Dependencies: Visually indicate or logically enforce that a task cannot be started (or moved before) its prerequisite dependency.
-
-Phase 4: Task Bank & Modals
-
-Task Bank: Students browse templates, claim tasks, and set target dates on their timeline.
-
-Task Summary Modal: Purely informational now. Clicking a block shows sub-tasks, prerequisite dependencies, and a "Jump to Journal" button.
-
-Note: Submissions have been completely removed from this phase and moved to Phase 6.
-
-Phase 5: MYP Assessment & Rubrics
-
-TeacherRubricBank: Admin panel for teachers to define reusable, strand-level MYP rubrics (Criteria A-D, Strands i-iv) with official descriptors and student-friendly exemplars.
-
-Update TaskPanel: Allow teachers to attach specific rubric strands to Master Tasks.
-
-Update TaskSummaryModal: Display attached rubrics to students when viewing task details.
-
-Phase 6: The Engineering Journal (Execution Engine)
-
-Dual-Mode Interface: Implement an /journal route that toggles between "Edit Mode" and "Preview Mode".
-
-Edit Mode (Forms): Queries Firestore for all tasks currently on the student's timeline. Dynamically generates a continuous feed of form blocks for each active/uncompleted task.
-
-Google Drive Integration: Within these form blocks, students can type text and upload files. Uploads utilize the captured OAuth token to push files directly to the Teacher's Class Drive Folder.
-
-Preview Mode (LaTeX): An aggregator function compiles the saved form submissions and formats them into a cohesive Markdown/LaTeX string. Uses react-latex-next to render the final Engineering Journal in the browser with full mathematical formatting.
-
-Phase 7: Assessment & Feedback
-
-Teacher Journal Viewer: A new interface (e.g., TeacherJournalReview.tsx) where a teacher can select a student from their roster and view that student's compiled Preview document.
-
-Interactive Grading: Alongside the student's journal, we render the rubric strands attached to their completed tasks. The teacher can simply click a band (e.g., the "5-6" box) to lock in a score.
-
-Student Feedback Dashboard: Update the student's view so they can see their achieved scores and read any feedback the teacher left.
+Phase 7: Assessment & Feedback (Completed)
+- TeacherJournalReview: Select a student, view their GitHub link, and read compiled Preview documents.
+- Interactive Grading: Teachers click rubric band boxes to lock in scores and leave comments, which sync to the Student's Preview Mode.
