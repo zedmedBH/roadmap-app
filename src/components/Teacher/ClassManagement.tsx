@@ -1,4 +1,3 @@
-// src/components/Teacher/ClassManagement.tsx
 import React, { useState, useEffect } from 'react';
 import { collection, query, where, onSnapshot, addDoc, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
@@ -22,25 +21,17 @@ const ClassManagement: React.FC = () => {
 
   useEffect(() => {
     if (user?.role !== 'teacher') return;
-
     const q = query(collection(db, 'classes'), where('teacherId', '==', user.id));
     const unsubscribe = onSnapshot(q, (snap) => {
       const fetchedClasses = snap.docs.map(d => ({ id: d.id, ...d.data() } as SchoolClass));
       setClasses(fetchedClasses);
-      
-      // Auto-select the first class if none is selected
-      if (fetchedClasses.length > 0 && !activeClassId) {
-        setActiveClassId(fetchedClasses[0].id);
-      }
     });
-
     return () => unsubscribe();
-  }, [user, activeClassId, setActiveClassId]);
+  }, [user?.role, user?.id]); // Removed activeClassId from array
 
   const handleCreateClass = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     if (!user?.id || !newClassName.trim() || !newTerm.trim()) return;
-
     setIsCreating(true);
     try {
       // 1. Get the Teacher's Master Folder ID

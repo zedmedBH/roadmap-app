@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { collection, query, where, onSnapshot } from 'firebase/firestore'; 
+import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
 import StudentRosterImport from './Teacher/StudentRosterImport';
 import GroupManagement from './Teacher/GroupManagement';
@@ -13,9 +15,22 @@ import TeacherJournalReview from './Teacher/TeacherJournalReview';
 
 const Dashboard: React.FC = () => {
   // logout removed from here since it's handled in App.tsx
-  const { user, activeClassId } = useAuth();
+  const { user, activeClassId, setActiveClassId } = useAuth();
   const [activeTab, setActiveTab] = useState<'roadmap' | 'grading' | 'curriculum' | 'setup'>('roadmap');
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (user?.role !== 'teacher') return;
+    
+    const q = query(collection(db, 'classes'), where('teacherId', '==', user.id));
+    const unsubscribe = onSnapshot(q, (snap) => {
+      if (!snap.empty) {
+        // Only auto-select if we don't already have an active class
+        setActiveClassId(prev => prev ? prev : snap.docs[0].id);
+      }
+    });
+    return () => unsubscribe();
+  }, [user?.role, user?.id, setActiveClassId]);
 
   return (
     <div className="space-y-6 mt-2">

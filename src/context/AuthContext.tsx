@@ -19,7 +19,7 @@ interface AuthContextType {
   actualTeacherUser: AppUser | null;
   loading: boolean;
   activeClassId: string | null;
-  setActiveClassId: (id: string | null) => void;
+  setActiveClassId: React.Dispatch<React.SetStateAction<string | null>>;
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   setViewAsStudent: (student: AppUser) => void;
