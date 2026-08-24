@@ -1,7 +1,8 @@
-// src/components/Teacher/TeacherTaskBank.tsx
 import React, { useState, useEffect } from 'react';
 import { collection, query, onSnapshot, doc, deleteDoc, updateDoc, getDocs, where } from 'firebase/firestore';
 import { db } from '../../config/firebase';
+import { useAuth } from '../../context/AuthContext';
+import TaskPanel from '../Timeline/TaskPanel';
 
 interface TaskTemplate {
   id: string;
@@ -20,10 +21,13 @@ const TASK_COLORS = [
 ];
 
 const TeacherTaskBank: React.FC = () => {
+  const { user, activeClassId } = useAuth();
   const [templates, setTemplates] = useState<TaskTemplate[]>([]);
+  const [groups, setGroups] = useState<{ id: string; title: string }[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Edit State
+  // Panel & Edit State
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<TaskTemplate | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editColor, setEditColor] = useState('');
@@ -38,9 +42,22 @@ const TeacherTaskBank: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
+  // Fetch groups so the TaskPanel can broadcast team tasks
+  useEffect(() => {
+    if (!activeClassId) return;
+    const qGroups = query(collection(db, 'groups'), where('classId', '==', activeClassId));
+    const unsubscribeGroups = onSnapshot(qGroups, (snapshot) => {
+      const fetchedGroups = snapshot.docs.map(doc => ({
+        id: doc.id,
+        title: doc.data().name || 'Unnamed Group',
+      }));
+      setGroups(fetchedGroups);
+    });
+    return () => unsubscribeGroups();
+  }, [activeClassId]);
+
   const handleDelete = async (templateId: string) => {
     if (!window.confirm("Are you sure you want to delete this master task? It will be permanently removed from ALL student timelines and the Task Bank.")) return;
-
     try {
       // 1. Delete the Master Template
       await deleteDoc(doc(db, 'taskTemplates', templateId));
@@ -48,7 +65,6 @@ const TeacherTaskBank: React.FC = () => {
       // 2. Find and eradicate all timeline copies and their subtasks
       const q = query(collection(db, 'timelineItems'), where('templateId', '==', templateId));
       const snap = await getDocs(q);
-
       for (const tDoc of snap.docs) {
         // Delete subtasks first to prevent orphaning
         const subQ = query(collection(db, 'timelineItems', tDoc.id, 'subtasks'));
@@ -74,7 +90,6 @@ const TeacherTaskBank: React.FC = () => {
   const handleEditSave = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     if (!editingTask || !editTitle.trim()) return;
-
     setIsUpdating(true);
     try {
       // 1. Update the Master Template
@@ -86,7 +101,6 @@ const TeacherTaskBank: React.FC = () => {
       // 2. Cascade the update to all timeline copies
       const q = query(collection(db, 'timelineItems'), where('templateId', '==', editingTask.id));
       const snap = await getDocs(q);
-
       const updatePromises = snap.docs.map(tDoc =>
         updateDoc(doc(db, 'timelineItems', tDoc.id), {
           title: editTitle.trim(),
@@ -94,7 +108,6 @@ const TeacherTaskBank: React.FC = () => {
         })
       );
       await Promise.all(updatePromises);
-
       setEditingTask(null);
     } catch (err) {
       console.error("Error updating master task", err);
@@ -108,8 +121,18 @@ const TeacherTaskBank: React.FC = () => {
 
   return (
     <div className="p-6 bg-white rounded-lg shadow-md border border-gray-200 mt-6">
-      <h2 className="text-xl font-bold text-gray-800 mb-2">Master Task Management</h2>
-      <p className="text-gray-600 mb-6">Manage all Tasks and Templates here. Edits and deletions will cascade globally to all connected student timelines.</p>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <div>
+          <h2 className="text-xl font-bold text-gray-800 mb-2">Master Task Management</h2>
+          <p className="text-gray-600 text-sm">Manage all Tasks and Templates here. Edits and deletions will cascade globally to all connected student timelines.</p>
+        </div>
+        <button 
+          onClick={() => setIsPanelOpen(true)} 
+          className="bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700 transition font-medium whitespace-nowrap"
+        >
+          + Add Task
+        </button>
+      </div>
 
       {templates.length === 0 ? (
         <div className="text-center py-10 text-gray-400 border-2 border-dashed border-gray-200 rounded-lg">
@@ -128,7 +151,7 @@ const TeacherTaskBank: React.FC = () => {
                     </span>
                   </div>
                   <span className={`text-xs px-2 py-1 rounded-full font-semibold ${template.taskType === 'individual' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-                    {template.taskType === 'individual' ? '👤 Individual' : '👥 Team'}
+                    {template.taskType === 'individual' ? '  Individual' : '  Team'}
                   </span>
                 </div>
                 <h3 className="font-bold text-gray-800 text-lg mb-4">{template.title}</h3>
@@ -147,6 +170,9 @@ const TeacherTaskBank: React.FC = () => {
         </div>
       )}
 
+      {/* ADD TASK PANEL */}
+      <TaskPanel isOpen={isPanelOpen} onClose={() => setIsPanelOpen(false)} groups={groups} />
+
       {/* EDIT MODAL */}
       {editingTask && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-[9999] p-4">
@@ -161,7 +187,6 @@ const TeacherTaskBank: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Task Title</label>
                 <input type="text" value={editTitle} onChange={e => setEditTitle(e.target.value)} className="w-full border border-gray-300 p-2 rounded focus:ring-blue-500 focus:border-blue-500 outline-none" required />
               </div>
-
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Color Marker</label>
                 <div className="flex gap-2">
@@ -170,7 +195,6 @@ const TeacherTaskBank: React.FC = () => {
                   ))}
                 </div>
               </div>
-
               <div className="pt-4 flex justify-end gap-2 border-t mt-4">
                 <button type="button" onClick={() => setEditingTask(null)} className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50 transition">Cancel</button>
                 <button type="submit" disabled={isUpdating} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-blue-300 transition">

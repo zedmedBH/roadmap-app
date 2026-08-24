@@ -4,7 +4,7 @@ import { collection, query, where, onSnapshot, doc, setDoc, getDoc, updateDoc } 
 import { Link } from 'react-router-dom';
 import 'katex/dist/katex.min.css';
 import Latex from 'react-latex-next';
-import { FiChevronDown, FiChevronUp } from 'react-icons/fi';
+import { FiChevronDown, FiChevronUp, FiGithub, FiEdit2, FiCheck } from 'react-icons/fi';
 import { db } from '../../config/firebase';
 import { useAuth } from '../../context/AuthContext';
 import { uploadFileToDrive, createDriveFolder } from '../../utils/driveUpload';
@@ -43,6 +43,10 @@ const EngineeringJournal: React.FC = () => {
   
   const [savingId, setSavingId] = useState<string | null>(null);
   const [uploadingTaskId, setUploadingTaskId] = useState<string | null>(null);
+
+  const [githubRepo, setGithubRepo] = useState<string>('');
+  const [isEditingGithub, setIsEditingGithub] = useState(false);
+  const [isSavingGithub, setIsSavingGithub] = useState(false);
   
   const [classDriveFolderId, setClassDriveFolderId] = useState<string | null>(null);
   const [studentFolderId, setStudentFolderId] = useState<string | null>(null);
@@ -63,8 +67,13 @@ const EngineeringJournal: React.FC = () => {
     }
 
     getDoc(doc(db, 'users', user.id)).then(userDoc => {
-      if (userDoc.exists() && userDoc.data().studentFolderId) {
-        setStudentFolderId(userDoc.data().studentFolderId);
+      if (userDoc.exists()) {
+        if (userDoc.data().studentFolderId) {
+          setStudentFolderId(userDoc.data().studentFolderId);
+        }
+        if (userDoc.data().githubRepo) {
+          setGithubRepo(userDoc.data().githubRepo);
+        }
       }
     });
 
@@ -114,6 +123,20 @@ const EngineeringJournal: React.FC = () => {
       unsubFeedback();
     };
   }, [user]);
+
+  const handleSaveGithubLink = async () => {
+    if (!user) return;
+    setIsSavingGithub(true);
+    try {
+      await updateDoc(doc(db, 'users', user.id), { githubRepo: githubRepo.trim() });
+      setIsEditingGithub(false);
+    } catch (error) {
+      console.error("Error saving GitHub link:", error);
+      alert("Failed to save GitHub repository link.");
+    } finally {
+      setIsSavingGithub(false);
+    }
+  };
 
   const handleTextChange = (taskId: string, text: string) => {
     setSubmissions(prev => ({
@@ -255,6 +278,48 @@ const EngineeringJournal: React.FC = () => {
               Preview & Feedback
             </button>
           </div>
+        </div>
+
+        <div className="mt-4 flex items-center gap-2 bg-gray-50 p-3 rounded-lg border border-gray-200">
+          <FiGithub className="text-gray-700 text-lg shrink-0" />
+          {isEditingGithub ? (
+            <div className="flex items-center gap-2 w-full max-w-md">
+              <input 
+                type="url"
+                value={githubRepo}
+                onChange={(e) => setGithubRepo(e.target.value)}
+                placeholder="https://github.com/username/repo"
+                className="flex-1 text-sm border border-gray-300 rounded px-2 py-1 outline-none focus:border-blue-500"
+              />
+              <button 
+                onClick={handleSaveGithubLink}
+                disabled={isSavingGithub}
+                className="bg-gray-800 text-white p-1.5 rounded hover:bg-gray-900 transition disabled:opacity-50"
+                title="Save"
+              >
+                <FiCheck size={16} />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3 w-full">
+              {githubRepo ? (
+                <a href={githubRepo} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-sm font-medium truncate max-w-sm">
+                  {githubRepo}
+                </a>
+              ) : (
+                <span className="text-gray-400 text-sm italic">No GitHub repository linked.</span>
+              )}
+              {mode === 'edit' && (
+                <button 
+                  onClick={() => setIsEditingGithub(true)}
+                  className="text-gray-400 hover:text-gray-700 transition"
+                  title="Edit GitHub Link"
+                >
+                  <FiEdit2 size={14} />
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

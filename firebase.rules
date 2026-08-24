@@ -1,0 +1,92 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ----------------------------------------------------------------------
+    // HELPER FUNCTIONS
+    // ----------------------------------------------------------------------
+    
+    // Check if the user is signed in
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Check if the user has the 'teacher' role in their user document
+    function isTeacher() {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher';
+    }
+
+    // Check if the document belongs to the currently signed-in user
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // ----------------------------------------------------------------------
+    // COLLECTION RULES
+    // ----------------------------------------------------------------------
+
+    // USERS: Anyone logged in can read (needed to build rosters/groups). 
+    // Users can only write to their own profile, but teachers can edit any.
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isOwner(userId) || isTeacher();
+      allow delete: if isTeacher();
+    }
+
+    // CLASSES & GROUPS: Teachers control these; students can only view them.
+    match /classes/{classId} {
+      allow read: if isAuthenticated();
+      allow write: if isTeacher();
+    }
+
+    match /groups/{groupId} {
+      allow read: if isAuthenticated();
+      allow write: if isTeacher();
+    }
+
+    // TASK & RUBRIC BANKS: Teachers manage the master banks; students browse them.
+    match /taskTemplates/{templateId} {
+      allow read: if isAuthenticated();
+      allow write: if isTeacher();
+    }
+
+    match /rubricBank/{rubricId} {
+      allow read: if isAuthenticated();
+      allow write: if isTeacher();
+    }
+
+    // TIMELINE ITEMS (Active Tasks): 
+    // Students can create tasks (claiming from the bank) and update their own.
+    match /timelineItems/{itemId} {
+      allow read: if isAuthenticated();
+      
+      allow create: if isTeacher() || 
+                   (isAuthenticated() && request.resource.data.userId == request.auth.uid);
+                   
+      allow update, delete: if isTeacher() || 
+                           (isAuthenticated() && resource.data.userId == request.auth.uid);
+
+      // Sub-collections under timeline items
+      match /subtasks/{subtaskId} {
+        allow read: if isAuthenticated();
+        allow write: if isTeacher() || isAuthenticated(); // Allows students to check off subtasks
+      }
+    }
+
+    // SUBMISSIONS (Engineering Journal):
+    // Students can only write to submissions attached to their own User ID.
+    match /submissions/{submissionId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow delete: if isTeacher() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+    }
+
+    // FEEDBACK: Only teachers can grade and leave comments.
+    match /feedback/{feedbackId} {
+      allow read: if isAuthenticated();
+      allow write: if isTeacher();
+    }
+  }
+}

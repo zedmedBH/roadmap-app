@@ -1,5 +1,6 @@
 // src/components/Timeline/TaskSummaryModal.tsx
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { doc, updateDoc, collection, onSnapshot, query, orderBy, where, getDocs } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { useAuth } from '../../context/AuthContext';
@@ -22,6 +23,8 @@ const TaskSummaryModal: React.FC<TaskSummaryModalProps> = ({ isOpen, onClose, ta
   const { user } = useAuth();
   const [isUpdating, setIsUpdating] = useState(false);
   const [subTasks, setSubTasks] = useState<SubTask[]>([]);
+
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!isOpen || !task?.id) return;
@@ -191,7 +194,9 @@ const TaskSummaryModal: React.FC<TaskSummaryModalProps> = ({ isOpen, onClose, ta
           )}
           <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg flex justify-between items-center">
             <p className="text-sm text-blue-800">Ready to work on this task?</p>
-            <button className="bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700 font-medium text-sm">
+            <button 
+              onClick={() => navigate('/journal')}
+              className="bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700 font-medium text-sm">
               Open Engineering Journal
             </button>
           </div>

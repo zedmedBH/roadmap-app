@@ -17,7 +17,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
 // Extracted Navigation to use AuthContext
 function Navigation() {
-  const { user, actualTeacherUser, setViewAsStudent, stopViewingAsStudent } = useAuth();
+  const { user, actualTeacherUser, setViewAsStudent, stopViewingAsStudent, logout } = useAuth();
   const [students, setStudents] = useState<AppUser[]>([]);
 
   // Fetch students for the dropdown if we are a teacher
@@ -48,6 +48,11 @@ function Navigation() {
   return (
     <nav className="p-4 bg-blue-600 text-white font-bold flex justify-between items-center">
       <span>MYP Pacing LMS</span>
+      {user && (
+        <span className="text-sm font-medium text-blue-200 hidden md:inline">
+          Welcome, {user.firstName}
+        </span>
+      )}
       
       {/* Developer Toggle / Student Selector */}
       <div className="flex items-center gap-3">
@@ -77,6 +82,16 @@ function Navigation() {
             </button>
           </div>
         )}
+
+        {user && (
+          <button 
+            onClick={logout} 
+            className="bg-blue-700 hover:bg-blue-800 border border-blue-500 text-white px-4 py-1.5 rounded-md text-sm transition shadow-sm"
+          >
+            Log Out
+          </button>
+        )}
+        
       </div>
     </nav>
   );
