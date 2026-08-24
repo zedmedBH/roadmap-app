@@ -21,7 +21,7 @@ const TASK_COLORS = [
 ];
 
 const TeacherTaskBank: React.FC = () => {
-  const { user, activeClassId } = useAuth();
+  const { activeClassId } = useAuth();
   const [templates, setTemplates] = useState<TaskTemplate[]>([]);
   const [groups, setGroups] = useState<{ id: string; title: string }[]>([]);
   const [loading, setLoading] = useState(true);
