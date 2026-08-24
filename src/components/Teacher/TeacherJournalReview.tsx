@@ -1,8 +1,8 @@
-// src/components/Teacher/TeacherJournalReview.tsx
 import React, { useState, useEffect } from 'react';
 import { collection, query, where, onSnapshot, doc, setDoc, getDocs } from 'firebase/firestore';
 import Latex from 'react-latex-next';
 import 'katex/dist/katex.min.css';
+import { FiGithub } from 'react-icons/fi'; // <-- Imported the GitHub icon
 import { db } from '../../config/firebase';
 import { useAuth, type AppUser } from '../../context/AuthContext';
 
@@ -23,18 +23,18 @@ interface FeedbackState {
   comment: string;
 }
 
+// Extend AppUser locally so TypeScript knows about the githubRepo
+interface StudentWithRepo extends AppUser {
+  githubRepo?: string;
+}
+
 const TeacherJournalReview: React.FC = () => {
   const { user, activeClassId } = useAuth();
-  
-  const [students, setStudents] = useState<AppUser[]>([]);
+  const [students, setStudents] = useState<StudentWithRepo[]>([]);
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
-  
   const [tasks, setTasks] = useState<TimelineTask[]>([]);
   const [submissions, setSubmissions] = useState<Record<string, Submission>>({});
-  
-  //const [savedFeedbacks, setSavedFeedbacks] = useState<Record<string, FeedbackState>>({});
   const [draftFeedbacks, setDraftFeedbacks] = useState<Record<string, FeedbackState>>({});
-  
   const [loadingStudent, setLoadingStudent] = useState(false);
   const [savingTaskId, setSavingTaskId] = useState<string | null>(null);
 
@@ -43,7 +43,7 @@ const TeacherJournalReview: React.FC = () => {
     const fetchStudents = async () => {
       const q = query(collection(db, 'users'), where('role', '==', 'student'), where('classId', '==', activeClassId));
       const snap = await getDocs(q);
-      const fetchedStudents = snap.docs.map(d => ({ id: d.id, ...d.data() } as AppUser));
+      const fetchedStudents = snap.docs.map(d => ({ id: d.id, ...d.data() } as StudentWithRepo));
       
       fetchedStudents.sort((a, b) => a.firstName.localeCompare(b.firstName));
       setStudents(fetchedStudents);
@@ -55,13 +55,10 @@ const TeacherJournalReview: React.FC = () => {
     if (!selectedStudentId) {
       setTasks([]);
       setSubmissions({});
-      //setSavedFeedbacks({});
       setDraftFeedbacks({});
       return;
     }
-
     setLoadingStudent(true);
-
     let unsubTasks: () => void;
     let unsubSubmissions: () => void;
     let unsubFeedback: () => void;
@@ -104,7 +101,6 @@ const TeacherJournalReview: React.FC = () => {
             comment: data.comment || ''
           };
         });
-        //setSavedFeedbacks(fb);
         setDraftFeedbacks(fb); 
         setLoadingStudent(false);
       });
@@ -164,6 +160,9 @@ const TeacherJournalReview: React.FC = () => {
     }
   };
 
+  // Get the selected student's profile to extract the github link
+  const currentStudent = students.find(s => s.id === selectedStudentId);
+
   return (
     <div className="p-6 bg-white rounded-lg shadow-md border border-gray-200 mt-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 border-b pb-4 gap-4">
@@ -194,151 +193,166 @@ const TeacherJournalReview: React.FC = () => {
       ) : loadingStudent ? (
         <div className="text-center py-12 text-gray-500">Loading student journal...</div>
       ) : (
-        <div className="space-y-12">
-          {tasks.length === 0 ? (
-             <div className="text-center py-10 text-gray-400 italic">
-               This student has no active tasks on their timeline.
-             </div>
-          ) : (
-            tasks.map((task, index) => {
-              const sub = submissions[task.id];
-              const draft = draftFeedbacks[task.id] || { scores: {}, comment: '' };
-              const hasRubrics = task.rubricStrands && task.rubricStrands.length > 0;
+        <div className="space-y-8">
+          
+          {/* GitHub Repository Banner */}
+          {currentStudent?.githubRepo && (
+            <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-lg p-4 shadow-sm">
+              <FiGithub className="text-gray-700 text-2xl shrink-0" />
+              <div>
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">GitHub Repository</p>
+                <a href={currentStudent.githubRepo} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-sm font-medium">
+                  {currentStudent.githubRepo}
+                </a>
+              </div>
+            </div>
+          )}
 
-              return (
-                <div key={task.id} className="border border-gray-200 rounded-lg overflow-hidden shadow-sm flex flex-col md:flex-row">
-                  
-                  {/* Left Column: Student Submission */}
-                  <div className="flex-1 p-6 bg-white border-b md:border-b-0 md:border-r border-gray-200">
-                    <div className="mb-4">
-                      <h3 className="text-xl font-bold text-gray-900 mb-1">{index + 1}. {task.title}</h3>
-                      <p className="text-xs text-gray-400 font-mono">
-                        Last Edited: {sub?.lastEdited ? new Date(sub.lastEdited).toLocaleString() : 'No submission yet'}
-                      </p>
-                    </div>
+          <div className="space-y-12">
+            {tasks.length === 0 ? (
+               <div className="text-center py-10 text-gray-400 italic">
+                 This student has no active tasks on their timeline.
+               </div>
+            ) : (
+              tasks.map((task, index) => {
+                const sub = submissions[task.id];
+                const draft = draftFeedbacks[task.id] || { scores: {}, comment: '' };
+                const hasRubrics = task.rubricStrands && task.rubricStrands.length > 0;
 
-                    <div className="text-gray-800 whitespace-pre-wrap leading-relaxed text-sm bg-gray-50 p-4 rounded border border-gray-100 min-h-[150px]">
-                      {sub?.textResponse ? (
-                        <Latex>{sub.textResponse}</Latex>
-                      ) : (
-                        <span className="text-gray-400 italic">No entry written yet.</span>
-                      )}
-                    </div>
-
-                    {sub?.imageUrls && sub.imageUrls.length > 0 && (
-                      <div className="mt-4 bg-blue-50/50 p-3 rounded-lg border border-blue-100">
-                        <h4 className="font-bold text-xs text-blue-900 mb-2 uppercase tracking-wider">📎 Attachments</h4>
-                        <ul className="list-disc list-inside text-sm text-blue-700 space-y-1 ml-1">
-                          {sub.imageUrls.map((url, i) => (
-                            <li key={i}>
-                              <a href={url} target="_blank" rel="noopener noreferrer" className="hover:underline font-medium">
-                                View Attachment {i + 1}
-                              </a>
-                            </li>
-                          ))}
-                        </ul>
+                return (
+                  <div key={task.id} className="border border-gray-200 rounded-lg overflow-hidden shadow-sm flex flex-col md:flex-row">
+                    
+                    {/* Left Column: Student Submission */}
+                    <div className="flex-1 p-6 bg-white border-b md:border-b-0 md:border-r border-gray-200">
+                      <div className="mb-4">
+                        <h3 className="text-xl font-bold text-gray-900 mb-1">{index + 1}. {task.title}</h3>
+                        <p className="text-xs text-gray-400 font-mono">
+                          Last Edited: {sub?.lastEdited ? new Date(sub.lastEdited).toLocaleString() : 'No submission yet'}
+                        </p>
                       </div>
-                    )}
-                  </div>
 
-                  {/* Right Column: Teacher Grading Panel */}
-                  <div className="w-full md:w-[450px] bg-purple-50 flex flex-col">
-                    <div className="p-4 bg-purple-100 border-b border-purple-200 flex justify-between items-center">
-                      <h4 className="font-bold text-purple-900">📝 Assessment</h4>
-                      <span className="text-xs font-semibold text-purple-600 bg-purple-200 px-2 py-1 rounded-full">
-                        {hasRubrics ? 'Graded Task' : 'Feedback Only'}
-                      </span>
-                    </div>
+                      <div className="text-gray-800 whitespace-pre-wrap leading-relaxed text-sm bg-gray-50 p-4 rounded border border-gray-100 min-h-[150px]">
+                        {sub?.textResponse ? (
+                          <Latex>{sub.textResponse}</Latex>
+                        ) : (
+                          <span className="text-gray-400 italic">No entry written yet.</span>
+                        )}
+                      </div>
 
-                    <div className="p-4 flex-1 space-y-6">
-                      {hasRubrics && (
-                        <div className="space-y-6">
-                          {task.rubricStrands?.map((r: any) => {
-                            const strandKey = `${r.criterion}.${r.strand}`;
-                            const currentScore = draft.scores[strandKey];
-                            const maxBand = r.maxBand || 8;
-
-                            // Filter the bands to only show the ones applicable to this task's maxBand
-                            const availableBands = r.bands.filter((b: any) => {
-                              const topScore = parseInt(b.levels.split('-')[1]);
-                              return topScore <= maxBand;
-                            });
-
-                            return (
-                              <div key={strandKey} className="bg-white p-4 rounded shadow-sm border border-purple-200">
-                                <div className="mb-3 border-b border-purple-100 pb-2">
-                                  <div className="flex justify-between items-center">
-                                    <span className="font-bold text-lg text-purple-800">Criterion {strandKey}</span>
-                                    <span className="text-xs font-bold bg-purple-100 text-purple-600 px-2 py-0.5 rounded">Max: {maxBand}</span>
-                                  </div>
-                                  <p className="text-xs text-gray-500 mt-1">{r.title}</p>
-                                </div>
-                                
-                                <div className="space-y-3">
-                                  {availableBands.map((band: any) => {
-                                    const scoresInBand = band.levels.split('-').map((s: string) => parseInt(s));
-                                    const isBandSelected = scoresInBand.includes(currentScore);
-
-                                    return (
-                                      <div key={band.levels} className={`p-3 rounded border transition-colors ${isBandSelected ? 'bg-purple-100 border-purple-300' : 'bg-gray-50 border-gray-200 hover:bg-purple-50'}`}>
-                                        <div className="flex justify-between items-start gap-4">
-                                          <div className="flex-1">
-                                            <p className="text-xs text-gray-700 leading-relaxed">
-                                              {band.studentExemplar || band.officialDescriptor}
-                                            </p>
-                                          </div>
-                                          <div className="flex gap-1 shrink-0">
-                                            {scoresInBand.map((score: number) => (
-                                              <button
-                                                key={score}
-                                                onClick={() => handleScoreChange(task.id, strandKey, score)}
-                                                className={`w-8 h-8 rounded text-sm font-bold transition-all ${
-                                                  currentScore === score 
-                                                    ? 'bg-purple-600 text-white shadow-md' 
-                                                    : 'bg-white text-gray-600 border border-gray-300 hover:border-purple-400 hover:text-purple-600'
-                                                }`}
-                                              >
-                                                {score}
-                                              </button>
-                                            ))}
-                                          </div>
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            );
-                          })}
+                      {sub?.imageUrls && sub.imageUrls.length > 0 && (
+                        <div className="mt-4 bg-blue-50/50 p-3 rounded-lg border border-blue-100">
+                          <h4 className="font-bold text-xs text-blue-900 mb-2 uppercase tracking-wider">📎 Attachments</h4>
+                          <ul className="list-disc list-inside text-sm text-blue-700 space-y-1 ml-1">
+                            {sub.imageUrls.map((url, i) => (
+                              <li key={i}>
+                                <a href={url} target="_blank" rel="noopener noreferrer" className="hover:underline font-medium">
+                                  View Attachment {i + 1}
+                                </a>
+                              </li>
+                            ))}
+                          </ul>
                         </div>
                       )}
+                    </div>
 
-                      <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-2">Teacher Comments</label>
-                        <textarea
-                          value={draft.comment}
-                          onChange={(e) => handleCommentChange(task.id, e.target.value)}
-                          placeholder="Leave constructive feedback here..."
-                          className="w-full p-3 border border-purple-200 rounded focus:border-purple-500 outline-none text-sm min-h-[100px] bg-white"
-                        />
+                    {/* Right Column: Teacher Grading Panel */}
+                    <div className="w-full md:w-[450px] bg-purple-50 flex flex-col">
+                      <div className="p-4 bg-purple-100 border-b border-purple-200 flex justify-between items-center">
+                        <h4 className="font-bold text-purple-900">📝 Assessment</h4>
+                        <span className="text-xs font-semibold text-purple-600 bg-purple-200 px-2 py-1 rounded-full">
+                          {hasRubrics ? 'Graded Task' : 'Feedback Only'}
+                        </span>
+                      </div>
+
+                      <div className="p-4 flex-1 space-y-6">
+                        {hasRubrics && (
+                          <div className="space-y-6">
+                            {task.rubricStrands?.map((r: any) => {
+                              const strandKey = `${r.criterion}.${r.strand}`;
+                              const currentScore = draft.scores[strandKey];
+                              const maxBand = r.maxBand || 8;
+
+                              // Filter the bands to only show the ones applicable to this task's maxBand
+                              const availableBands = r.bands.filter((b: any) => {
+                                const topScore = parseInt(b.levels.split('-')[1]);
+                                return topScore <= maxBand;
+                              });
+
+                              return (
+                                <div key={strandKey} className="bg-white p-4 rounded shadow-sm border border-purple-200">
+                                  <div className="mb-3 border-b border-purple-100 pb-2">
+                                    <div className="flex justify-between items-center">
+                                      <span className="font-bold text-lg text-purple-800">Criterion {strandKey}</span>
+                                      <span className="text-xs font-bold bg-purple-100 text-purple-600 px-2 py-0.5 rounded">Max: {maxBand}</span>
+                                    </div>
+                                    <p className="text-xs text-gray-500 mt-1">{r.title}</p>
+                                  </div>
+                                  
+                                  <div className="space-y-3">
+                                    {availableBands.map((band: any) => {
+                                      const scoresInBand = band.levels.split('-').map((s: string) => parseInt(s));
+                                      const isBandSelected = scoresInBand.includes(currentScore);
+
+                                      return (
+                                        <div key={band.levels} className={`p-3 rounded border transition-colors ${isBandSelected ? 'bg-purple-100 border-purple-300' : 'bg-gray-50 border-gray-200 hover:bg-purple-50'}`}>
+                                          <div className="flex justify-between items-start gap-4">
+                                            <div className="flex-1">
+                                              <p className="text-xs text-gray-700 leading-relaxed">
+                                                {band.studentExemplar || band.officialDescriptor}
+                                              </p>
+                                            </div>
+                                            <div className="flex gap-1 shrink-0">
+                                              {scoresInBand.map((score: number) => (
+                                                <button
+                                                  key={score}
+                                                  onClick={() => handleScoreChange(task.id, strandKey, score)}
+                                                  className={`w-8 h-8 rounded text-sm font-bold transition-all ${
+                                                    currentScore === score
+                                                      ? 'bg-purple-600 text-white shadow-md'
+                                                      : 'bg-white text-gray-600 border border-gray-300 hover:border-purple-400 hover:text-purple-600'
+                                                  }`}
+                                                >
+                                                  {score}
+                                                </button>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        <div>
+                          <label className="block text-sm font-bold text-gray-700 mb-2">Teacher Comments</label>
+                          <textarea
+                            value={draft.comment}
+                            onChange={(e) => handleCommentChange(task.id, e.target.value)}
+                            placeholder="Leave constructive feedback here..."
+                            className="w-full p-3 border border-purple-200 rounded focus:border-purple-500 outline-none text-sm min-h-[100px] bg-white"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="p-4 border-t border-purple-200 bg-white flex justify-end">
+                        <button
+                          onClick={() => saveFeedback(task.id)}
+                          disabled={savingTaskId === task.id}
+                          className="bg-purple-600 text-white px-6 py-2 rounded shadow hover:bg-purple-700 font-medium transition-colors disabled:bg-purple-300 w-full md:w-auto"
+                        >
+                          {savingTaskId === task.id ? 'Saving...' : 'Save Feedback'}
+                        </button>
                       </div>
                     </div>
-
-                    <div className="p-4 border-t border-purple-200 bg-white flex justify-end">
-                      <button
-                        onClick={() => saveFeedback(task.id)}
-                        disabled={savingTaskId === task.id}
-                        className="bg-purple-600 text-white px-6 py-2 rounded shadow hover:bg-purple-700 font-medium transition-colors disabled:bg-purple-300 w-full md:w-auto"
-                      >
-                        {savingTaskId === task.id ? 'Saving...' : 'Save Feedback'}
-                      </button>
-                    </div>
-
                   </div>
-                </div>
-              );
-            })
-          )}
+                );
+              })
+            )}
+          </div>
         </div>
       )}
     </div>

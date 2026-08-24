@@ -47,7 +47,7 @@ function Navigation() {
   
   return (
     <nav className="p-4 bg-blue-600 text-white font-bold flex justify-between items-center">
-      <span>MYP Pacing LMS</span>
+      <span>BH Robotics</span>
       {user && (
         <span className="text-sm font-medium text-blue-200 hidden md:inline">
           Welcome, {user.firstName}
@@ -91,7 +91,7 @@ function Navigation() {
             Log Out
           </button>
         )}
-        
+
       </div>
     </nav>
   );

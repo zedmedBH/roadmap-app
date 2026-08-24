@@ -201,9 +201,7 @@ const TimelineView: React.FC = () => {
       <div className="bg-white p-6 rounded-lg shadow-md mt-6 relative overflow-hidden">
         <div className="flex justify-between items-center mb-6 border-b pb-4">
           <h2 className="text-xl font-bold text-gray-800">{user?.role === 'teacher' ? 'Master Roadmap' : 'My Roadmap'}</h2>
-          {user?.role === 'teacher' && (
-            <button onClick={() => setIsPanelOpen(true)} className="bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700 transition z-10 relative">+ Add Task</button>
-          )}
+
         </div>
         {renderedGroups.length === 0 ? (
           <div className="text-center py-10 text-gray-500 border-2 border-dashed rounded-lg">No phases/groups found.</div>

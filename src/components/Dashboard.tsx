@@ -28,7 +28,7 @@ const Dashboard: React.FC = () => {
             {[
               { id: 'roadmap', label: 'Master Roadmap' },
               { id: 'grading', label: 'Journal Grading' },
-              { id: 'curriculum', label: 'Task & Rubric Banks' },
+              { id: 'curriculum', label: 'Rubrics' },
               { id: 'setup', label: 'Class Setup & Admin' }
             ].map((tab) => (
               <button
@@ -54,24 +54,24 @@ const Dashboard: React.FC = () => {
 
           {/* Tab Content */}
           <div className="w-full">
-            {activeTab === 'roadmap' && activeClassId && <TimelineView />}
-            {activeTab === 'grading' && activeClassId && <TeacherJournalReview />}
-            {activeTab === 'curriculum' && activeClassId && (
+            {activeTab === 'roadmap' && activeClassId && (
               <div className="space-y-6">
+                <TimelineView />
                 <TeacherTaskBank />
-                <TeacherRubricBank />
               </div>
-            )}
+              )}
+            {activeTab === 'grading' && activeClassId && <TeacherJournalReview />}
+            {activeTab === 'curriculum' && activeClassId && <TeacherRubricBank />}
             {activeTab === 'setup' && (
               <div className="space-y-6">
-                <ClassManagement />
-                <TeacherSettings />
                 {activeClassId && (
                   <>
                     <StudentRosterImport />
                     <GroupManagement />
                   </>
                 )}
+                <ClassManagement />
+                <TeacherSettings />
               </div>
             )}
           </div>
