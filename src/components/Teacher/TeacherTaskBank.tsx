@@ -10,6 +10,7 @@ interface TaskTemplate {
   color: string;
   taskType: 'team' | 'individual';
   isBroadcasted?: boolean;
+  visibleIn?: string[];
 }
 
 const TASK_COLORS = [
@@ -78,6 +79,23 @@ const TeacherTaskBank: React.FC = () => {
     } catch (err) {
       console.error("Error deleting master task", err);
       alert("An error occurred while deleting.");
+    }
+  };
+
+  const toggleVisibility = async (template: TaskTemplate) => {
+    if (!activeClassId) return;
+    const visibleIn = template.visibleIn || [];
+    const isVisible = visibleIn.includes(activeClassId);
+    
+    // If it's visible, remove the class ID. If hidden, add it.
+    const newVisibleIn = isVisible 
+      ? visibleIn.filter(id => id !== activeClassId) 
+      : [...visibleIn, activeClassId];
+
+    try {
+      await updateDoc(doc(db, 'taskTemplates', template.id), { visibleIn: newVisibleIn });
+    } catch (err) {
+      console.error("Error toggling visibility", err);
     }
   };
 
@@ -150,9 +168,19 @@ const TeacherTaskBank: React.FC = () => {
                       {template.isBroadcasted ? 'Broadcasted' : 'Bank Template'}
                     </span>
                   </div>
-                  <span className={`text-xs px-2 py-1 rounded-full font-semibold ${template.taskType === 'individual' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-                    {template.taskType === 'individual' ? '  Individual' : '  Team'}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {!template.isBroadcasted && (
+                      <button 
+                        onClick={() => toggleVisibility(template)}
+                        className={`text-xs px-2 py-1 rounded-full font-semibold transition ${template.visibleIn?.includes(activeClassId!) ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}
+                      >
+                        {template.visibleIn?.includes(activeClassId!) ? '👁️ Visible' : '👁️ Hidden'}
+                      </button>
+                    )}
+                    <span className={`text-xs px-2 py-1 rounded-full font-semibold ${template.taskType === 'individual' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                      {template.taskType === 'individual' ? '👤 Individual' : '👥 Team'}
+                    </span>
+                  </div>
                 </div>
                 <h3 className="font-bold text-gray-800 text-lg mb-4">{template.title}</h3>
               </div>

@@ -40,7 +40,7 @@ const TASK_COLORS = [
 ];
 
 const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
-  const { user } = useAuth();
+  const { user, activeClassId } = useAuth();
   
   const [title, setTitle] = useState('');
   const [isTemplate, setIsTemplate] = useState(true); 
@@ -142,6 +142,7 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
         dependencies: selectedDependencies,
         rubricStrands: selectedStrandsToEmbed,
         isBroadcasted: !isTemplate,
+        visibleIn: activeClassId ? [activeClassId] : [],
         createdAt: Date.now()
       });
 

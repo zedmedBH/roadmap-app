@@ -34,7 +34,8 @@ export interface RoadmapItem {
 }
 
 const TimelineView: React.FC = () => {
-  const { user, activeClassId } = useAuth();
+  const { user, activeClassId, setActiveClassId } = useAuth();
+  const [classes, setClasses] = useState<any[]>([]);
   const [baseGroups, setBaseGroups] = useState<RoadmapGroup[]>([]);
   const [items, setItems] = useState<any[]>([]);
   const [students, setStudents] = useState<AppUser[]>([]); 
@@ -122,7 +123,18 @@ const TimelineView: React.FC = () => {
     };
   }, [user, activeClassId]);
 
+  useEffect(() => {
+    if (user?.role !== 'teacher') return;
+    const qClasses = query(collection(db, 'classes'), where('teacherId', '==', user.id));
+    const unsubscribeClasses = onSnapshot(qClasses, (snapshot) => {
+      const fetchedClasses = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setClasses(fetchedClasses);
+    });
+    return () => unsubscribeClasses();
+  }, [user]);
+
   let renderedGroups: RoadmapGroup[] = [];
+  let renderedItems = items;
 
   if (user?.role === 'student') {
     const activeGroupId = user.groupId || 'unassigned-team';
@@ -139,9 +151,14 @@ const TimelineView: React.FC = () => {
   } else {
     renderedGroups = [...baseGroups];
     const knownGroupIds = new Set(baseGroups.map(g => g.id));
+    const knownStudentIds = new Set(students.map(s => s.id));
+    renderedItems = items.filter(item => 
+      knownGroupIds.has(item.group) || knownStudentIds.has(item.group)
+    );
+
     const extraGroups = new Map<string, string>();
     
-    items.forEach(item => {
+    renderedItems.forEach(item => {
       if (!knownGroupIds.has(item.group)) {
         const student = students.find(s => s.id === item.group);
         const displayName = student ? `${student.firstName} ${student.lastName}` : `Unknown ID: ${item.group.substring(0, 4)}...`;
@@ -201,6 +218,19 @@ const TimelineView: React.FC = () => {
       <div className="bg-white p-6 rounded-lg shadow-md mt-6 relative overflow-hidden">
         <div className="flex justify-between items-center mb-6 border-b pb-4">
           <h2 className="text-xl font-bold text-gray-800">{user?.role === 'teacher' ? 'Master Roadmap' : 'My Roadmap'}</h2>
+          {user?.role === 'teacher' && classes.length > 0 && (
+            <select
+              value={activeClassId || ''}
+              onChange={(e) => setActiveClassId(e.target.value)}
+              className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 font-bold outline-none"
+            >
+              {classes.map(c => (
+                <option key={c.id} value={c.id}>
+                  {c.name} ({c.term})
+                </option>
+              ))}
+            </select>
+          )}
 
         </div>
         {renderedGroups.length === 0 ? (
@@ -208,7 +238,7 @@ const TimelineView: React.FC = () => {
         ) : (
           <Timeline
             groups={renderedGroups} 
-            items={items} 
+            items={renderedItems} 
             defaultTimeStart={defaultTimeStart} 
             defaultTimeEnd={defaultTimeEnd}
             stackItems={true} 
