@@ -1,6 +1,6 @@
 // src/components/Timeline/TaskPanel.tsx
 import React, { useState, useEffect } from 'react';
-import { collection, addDoc, onSnapshot, query, where, getDocs } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { useAuth } from '../../context/AuthContext';
 import dayjs from 'dayjs';
@@ -9,6 +9,7 @@ interface TaskPanelProps {
   isOpen: boolean;
   onClose: () => void;
   groups: { id: string; title: string }[];
+  editTask?: any | null;
 }
 
 interface RubricBand {
@@ -39,7 +40,7 @@ const TASK_COLORS = [
   { label: 'Red (Urgent)', value: '#F44336' },
 ];
 
-const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
+const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups, editTask }) => {
   const { user, activeClassId } = useAuth();
   
   const [title, setTitle] = useState('');
@@ -61,11 +62,41 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
+    if (editTask) {
+      setTitle(editTask.title || '');
+      setIsTemplate(!editTask.isBroadcasted);
+      setTaskType(editTask.taskType || 'team');
+      setColor(editTask.color || TASK_COLORS[0].value);
+      setSubTasks(editTask.subtasks || []);
+      setSelectedDependencies(editTask.dependencies || []);
+      
+      if (editTask.rubricStrands) {
+        setSelectedRubrics(editTask.rubricStrands.map((r: any) => ({
+          id: r.originalRubricId || r.id,
+          maxBand: r.maxBand || 8
+        })));
+      } else {
+        setSelectedRubrics([]);
+      }
+    } else {
+      setTitle('');
+      setIsTemplate(true);
+      setTaskType('team');
+      setColor(TASK_COLORS[0].value);
+      setSubTasks([]);
+      setSelectedDependencies([]);
+      setSelectedRubrics([]);
+    }
+  }, [editTask, isOpen]);
+
+  useEffect(() => {
     if (!isOpen || !user) return;
     
     const qTemplates = query(collection(db, 'taskTemplates'));
     const unsubTemplates = onSnapshot(qTemplates, (snap) => {
-      setExistingTemplates(snap.docs.map(d => ({ id: d.id, title: d.data().title })));
+      // Don't allow a task to depend on itself
+      const fetched = snap.docs.map(d => ({ id: d.id, title: d.data().title }));
+      setExistingTemplates(editTask ? fetched.filter(t => t.id !== editTask.id) : fetched);
     });
 
     const qRubrics = query(collection(db, 'rubricBank'));
@@ -79,7 +110,7 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
       unsubTemplates();
       unsubRubrics();
     };
-  }, [isOpen, user]);
+  }, [isOpen, user, editTask]);
 
   const handleAddSubTask = () => {
     if (newSubTask.trim()) {
@@ -134,70 +165,85 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
 
     setIsSubmitting(true);
     try {
-      const templateDocRef = await addDoc(collection(db, 'taskTemplates'), {
-        title: title.trim(),
-        color: color,
-        taskType: taskType,
-        subtasks: finalSubTasks,
-        dependencies: selectedDependencies,
-        rubricStrands: selectedStrandsToEmbed,
-        isBroadcasted: !isTemplate,
-        visibleIn: activeClassId ? [activeClassId] : [],
-        createdAt: Date.now()
-      });
-
-      if (!isTemplate) {
-        const broadcastId = Date.now().toString();
-
-        const baseTaskData = {
+      if (editTask) {
+        // UPDATE EXISTING TASK
+        await updateDoc(doc(db, 'taskTemplates', editTask.id), {
           title: title.trim(),
-          start_time: dayjs(startDate).valueOf(),
-          end_time: dayjs(endDate).valueOf(),
+          color: color,
+          subtasks: finalSubTasks,
+          dependencies: selectedDependencies,
+          rubricStrands: selectedStrandsToEmbed,
+        });
+
+        // Cascade updates to all active timeline copies globally
+        const q = query(collection(db, 'timelineItems'), where('templateId', '==', editTask.id));
+        const snap = await getDocs(q);
+        const updatePromises = snap.docs.map(tDoc => 
+          updateDoc(doc(db, 'timelineItems', tDoc.id), {
+            title: title.trim(),
+            color: color,
+            dependencies: selectedDependencies,
+            rubricStrands: selectedStrandsToEmbed
+          })
+        );
+        await Promise.all(updatePromises);
+      } else {
+        // CREATE NEW TASK
+        const templateDocRef = await addDoc(collection(db, 'taskTemplates'), {
+          title: title.trim(),
           color: color,
           taskType: taskType,
-          status: 'incomplete',
-          templateId: templateDocRef.id,
-          broadcastId: broadcastId, 
+          subtasks: finalSubTasks,
           dependencies: selectedDependencies,
-          rubricStrands: selectedStrandsToEmbed 
-        };
+          rubricStrands: selectedStrandsToEmbed,
+          isBroadcasted: !isTemplate,
+          visibleIn: activeClassId ? [activeClassId] : [],
+          createdAt: Date.now()
+        });
 
-        const targetGroups = taskType === 'team' 
-          ? groups.map(g => ({ group: g.id, teamId: g.id, userId: null }))
-          : (await getDocs(query(collection(db, 'users'), where('role', '==', 'student')))).docs.map(d => ({ group: d.id, userId: d.id, teamId: d.data().groupId || null }));
+        if (!isTemplate) {
+          const broadcastId = Date.now().toString();
+          const baseTaskData = {
+            title: title.trim(),
+            start_time: dayjs(startDate).valueOf(),
+            end_time: dayjs(endDate).valueOf(),
+            color: color,
+            taskType: taskType,
+            status: 'incomplete',
+            templateId: templateDocRef.id,
+            broadcastId: broadcastId, 
+            dependencies: selectedDependencies,
+            rubricStrands: selectedStrandsToEmbed 
+          };
 
-        for (const target of targetGroups) {
-          const docRef = await addDoc(collection(db, 'timelineItems'), {
-            ...baseTaskData,
-            ...target
-          });
+          const targetGroups = taskType === 'team' 
+            ? groups.map(g => ({ group: g.id, teamId: g.id, userId: null }))
+            : (await getDocs(query(collection(db, 'users'), where('role', '==', 'student')))).docs.map(d => ({ group: d.id, userId: d.id, teamId: d.data().groupId || null }));
 
-          if (finalSubTasks.length > 0) {
-            const subTaskPromises = finalSubTasks.map((st, index) => 
-              addDoc(collection(db, 'timelineItems', docRef.id, 'subtasks'), {
-                title: st,
-                completed: false,
-                createdAt: Date.now() + index 
-              })
-            );
-            await Promise.all(subTaskPromises);
+          for (const target of targetGroups) {
+            const docRef = await addDoc(collection(db, 'timelineItems'), {
+              ...baseTaskData,
+              ...target
+            });
+
+            if (finalSubTasks.length > 0) {
+              const subTaskPromises = finalSubTasks.map((st, index) => 
+                addDoc(collection(db, 'timelineItems', docRef.id, 'subtasks'), {
+                  title: st,
+                  completed: false,
+                  createdAt: Date.now() + index 
+                })
+              );
+              await Promise.all(subTaskPromises);
+            }
           }
         }
       }
       
-      setTitle('');
-      setIsTemplate(true);
-      setTaskType('team');
-      setStartDate(dayjs().format('YYYY-MM-DD'));
-      setEndDate(dayjs().add(3, 'day').format('YYYY-MM-DD'));
-      setSubTasks([]);
-      setNewSubTask('');
-      setSelectedDependencies([]);
-      setSelectedRubrics([]); 
       onClose();
     } catch (error) {
-      console.error("Error adding task: ", error);
-      alert("Failed to create task.");
+      console.error("Error saving task: ", error);
+      alert("Failed to save task.");
     } finally {
       setIsSubmitting(false);
     }
@@ -206,10 +252,9 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
   return (
     <>
       {isOpen && <div className="fixed inset-0 bg-black bg-opacity-30 z-[9998] transition-opacity" onClick={onClose} />}
-
       <div className={`fixed inset-y-0 right-0 w-full sm:w-96 bg-white shadow-2xl z-[9999] transform transition-transform duration-300 ease-in-out flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         <div className="p-6 border-b flex justify-between items-center bg-gray-50">
-          <h3 className="text-xl font-bold text-gray-800">Add New Task</h3>
+          <h3 className="text-xl font-bold text-gray-800">{editTask ? 'Edit Task' : 'Add New Task'}</h3>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-700 text-2xl leading-none">&times;</button>
         </div>
 
@@ -220,16 +265,16 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
             <div>
               <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">1. Destination</p>
               <div className="flex flex-col gap-2">
-                <label className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${isTemplate ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200 hover:bg-gray-50'}`}>
-                  <input type="radio" checked={isTemplate} onChange={() => setIsTemplate(true)} className="w-4 h-4 text-blue-600 focus:ring-blue-500" />
+                <label className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${editTask ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'} ${isTemplate ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200 hover:bg-gray-50'}`}>
+                  <input type="radio" checked={isTemplate} onChange={() => !editTask && setIsTemplate(true)} disabled={!!editTask} className="w-4 h-4 text-blue-600 focus:ring-blue-500" />
                   <div>
                     <p className="text-sm font-medium text-gray-900">Save to Task Bank</p>
                     <p className="text-xs text-gray-500">Students will claim this and set their own dates.</p>
                   </div>
                 </label>
                 
-                <label className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${!isTemplate ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200 hover:bg-gray-50'}`}>
-                  <input type="radio" checked={!isTemplate} onChange={() => setIsTemplate(false)} className="w-4 h-4 text-blue-600 focus:ring-blue-500" />
+                <label className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${editTask ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'} ${!isTemplate ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200 hover:bg-gray-50'}`}>
+                  <input type="radio" checked={!isTemplate} onChange={() => !editTask && setIsTemplate(false)} disabled={!!editTask} className="w-4 h-4 text-blue-600 focus:ring-blue-500" />
                   <div>
                     <p className="text-sm font-medium text-gray-900">Push to Timelines</p>
                     <p className="text-xs text-gray-500">Immediately broadcasts to everyone.</p>
@@ -242,15 +287,16 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
             <div>
               <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">2. Assignment Type</p>
               <div className="flex gap-4">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="radio" checked={taskType === 'team'} onChange={() => setTaskType('team')} className="w-4 h-4 text-blue-600" />
+                <label className={`flex items-center gap-2 ${editTask ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
+                  <input type="radio" checked={taskType === 'team'} onChange={() => !editTask && setTaskType('team')} disabled={!!editTask} className="w-4 h-4 text-blue-600" />
                   <span className="text-sm font-medium text-gray-800">Team Task</span>
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="radio" checked={taskType === 'individual'} onChange={() => setTaskType('individual')} className="w-4 h-4 text-blue-600" />
+                <label className={`flex items-center gap-2 ${editTask ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
+                  <input type="radio" checked={taskType === 'individual'} onChange={() => !editTask && setTaskType('individual')} disabled={!!editTask} className="w-4 h-4 text-blue-600" />
                   <span className="text-sm font-medium text-gray-800">Individual Task</span>
                 </label>
               </div>
+              {editTask && <p className="text-xs text-orange-500 mt-1">Task type cannot be changed after creation.</p>}
             </div>
 
             {/* TASK DETAILS */}
@@ -265,6 +311,7 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
                 <div className="bg-purple-50 p-3 rounded border border-purple-100">
                   <label className="block text-sm font-medium text-purple-900 mb-1">Assessment Criteria (Optional)</label>
                   <p className="text-xs text-purple-700 mb-2">Select rubric strands and max possible achievement bands.</p>
+                  
                   <div className="max-h-48 overflow-y-auto space-y-1 bg-white border border-purple-200 rounded p-2">
                     {rubricBank.map(r => {
                       const isSelected = selectedRubrics.some(sr => sr.id === r.id);
@@ -275,9 +322,9 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
                           <label className="flex items-start gap-2 cursor-pointer">
                             <input 
                               type="checkbox" 
-                              checked={isSelected}
-                              onChange={() => toggleRubric(r.id)}
-                              className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500 mt-0.5"
+                              checked={isSelected} 
+                              onChange={() => toggleRubric(r.id)} 
+                              className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500 mt-0.5" 
                             />
                             <div className="flex flex-col">
                               <span className="font-semibold text-purple-700 leading-tight">Crit {r.criterion}.{r.strand}</span>
@@ -285,7 +332,7 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
                             </div>
                           </label>
                           
-                          {/* Max Band Dropdown - Only shows if Rubric is selected */}
+                          {/* Max Band Dropdown */}
                           {isSelected && (
                             <div className="ml-6 flex items-center gap-2">
                               <span className="text-xs font-semibold text-gray-500 uppercase">Max Band:</span>
@@ -318,9 +365,9 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
                       <label key={t.id} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer hover:bg-gray-50 p-1 rounded">
                         <input 
                           type="checkbox" 
-                          checked={selectedDependencies.includes(t.id)}
-                          onChange={() => toggleDependency(t.id)}
-                          className="w-3 h-3 text-orange-600 rounded focus:ring-orange-500"
+                          checked={selectedDependencies.includes(t.id)} 
+                          onChange={() => toggleDependency(t.id)} 
+                          className="w-3 h-3 text-orange-600 rounded focus:ring-orange-500" 
                         />
                         {t.title}
                       </label>
@@ -329,7 +376,7 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
                 </div>
               )}
               
-              {!isTemplate && (
+              {!isTemplate && !editTask && (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
@@ -374,15 +421,14 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups }) => {
                   ))}
                 </div>
               </div>
+
             </div>
-            
           </form>
         </div>
-
         <div className="p-6 border-t bg-gray-50 flex justify-end gap-3">
           <button type="button" onClick={onClose} className="px-4 py-2 text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50 transition-colors">Cancel</button>
           <button type="submit" form="task-form" disabled={isSubmitting} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-blue-300 transition-colors font-medium">
-            {isSubmitting ? 'Saving...' : (isTemplate ? 'Add to Bank' : 'Broadcast Task')}
+            {isSubmitting ? 'Saving...' : (editTask ? 'Save Changes' : (isTemplate ? 'Add to Bank' : 'Broadcast Task'))}
           </button>
         </div>
       </div>
