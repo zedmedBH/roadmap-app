@@ -38,6 +38,7 @@ const EngineeringJournal: React.FC = () => {
 
   // Accordion state for the summary grid
   const [expandedCriteria, setExpandedCriteria] = useState<Record<string, boolean>>({});
+  const [expandedRubrics, setExpandedRubrics] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!user) return;
@@ -213,6 +214,11 @@ const EngineeringJournal: React.FC = () => {
 
   const toggleCriterion = (crit: string) => {
     setExpandedCriteria(prev => ({ ...prev, [crit]: !prev[crit] }));
+  };
+
+  const toggleRubricView = (taskId: string, criterion: string, strand: string) => {
+    const key = `${taskId}-${criterion}-${strand}`;
+    setExpandedRubrics(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
   if (loading) return <div className="p-6">Loading Engineering Journal...</div>;
@@ -407,16 +413,51 @@ const EngineeringJournal: React.FC = () => {
                 <div className="bg-white p-4 border-b border-gray-200">
                   <h3 className="font-bold text-lg text-gray-800 mb-2">{task.title}</h3>
                   {task.rubricStrands && task.rubricStrands.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {task.rubricStrands.map((r: any) => (
-                        <span key={`${r.criterion}-${r.strand}`} className="text-[10px] bg-purple-100 text-purple-800 px-2 py-1 rounded font-semibold uppercase tracking-wider" title={r.title}>
-                          Crit {r.criterion}.{r.strand} (Max: {r.maxBand || 8})
-                        </span>
-                      ))}
+                    <div className="flex flex-col gap-2">
+                      <div className="flex flex-wrap gap-2">
+                        {task.rubricStrands.map((r: any) => {
+                          const key = `${task.id}-${r.criterion}-${r.strand}`;
+                          const isExpanded = expandedRubrics[key];
+                          
+                          return (
+                            <button 
+                              key={key} 
+                              onClick={() => toggleRubricView(task.id, r.criterion, r.strand)}
+                              className="flex items-center gap-1 text-[10px] bg-purple-100 hover:bg-purple-200 text-purple-800 px-2 py-1 rounded font-semibold uppercase tracking-wider transition-colors cursor-pointer"
+                              title="Click to view rubric details"
+                            >
+                              Crit {r.criterion}.{r.strand} (Max: {r.maxBand || 8})
+                              {isExpanded ? <FiChevronUp size={12} /> : <FiChevronDown size={12} />}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Expanded Rubric Details */}
+                      {task.rubricStrands.map((r: any) => {
+                        const key = `${task.id}-${r.criterion}-${r.strand}`;
+                        if (!expandedRubrics[key]) return null;
+
+                        return (
+                          <div key={`detail-${key}`} className="bg-purple-50 border border-purple-200 rounded p-3 mt-1 shadow-inner">
+                            <p className="font-bold text-purple-900 text-sm mb-2">{r.title}</p>
+                            <div className="space-y-2">
+                              {r.bands.filter((b: any) => parseInt(b.levels.split('-')[1]) <= (r.maxBand || 8)).map((band: any) => (
+                                <div key={band.levels} className="bg-white border border-purple-100 rounded p-2 flex gap-3 shadow-sm">
+                                  <span className="font-bold text-purple-600 text-xs w-8 shrink-0 mt-0.5">{band.levels}</span>
+                                  <span className="text-xs text-gray-700 leading-relaxed">
+                                    {band.studentExemplar || band.officialDescriptor}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
-                
+
                 {task.journalInstructions && (
                   <div className="bg-purple-50 border border-purple-200 rounded p-3 mb-3">
                     <h4 className="text-xs font-bold text-purple-800 uppercase tracking-wider mb-1">📝 Journal Prompt</h4>
