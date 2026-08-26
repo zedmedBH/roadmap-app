@@ -72,6 +72,7 @@ const EngineeringJournal: React.FC = () => {
           id: t.id, 
           title: t.title, 
           rubricStrands: t.rubricStrands,
+          journalInstructions: t.journalInstructions,
           group: t.group,
           start_time: t.start_time,
           end_time: t.end_time
@@ -415,6 +416,13 @@ const EngineeringJournal: React.FC = () => {
                     </div>
                   )}
                 </div>
+                
+                {task.journalInstructions && (
+                  <div className="bg-purple-50 border border-purple-200 rounded p-3 mb-3">
+                    <h4 className="text-xs font-bold text-purple-800 uppercase tracking-wider mb-1">📝 Journal Prompt</h4>
+                    <p className="text-sm text-purple-900 whitespace-pre-wrap">{task.journalInstructions}</p>
+                  </div>
+                )}
 
                 <div className="p-4 flex flex-col gap-3">
                   <textarea

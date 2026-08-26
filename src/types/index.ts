@@ -34,6 +34,7 @@ export interface TaskTemplate {
   subtasks?: string[];
   dependencies?: string[];
   rubricStrands?: RubricStrand[];
+  journalInstructions?: string;
 }
 
 export interface TimelineItem {
@@ -55,6 +56,7 @@ export interface TimelineItem {
   rubricStrands?: RubricStrand[];
   claimedRoles?: Record<string, string>; // Role Name -> User ID
   dependencies?: string[];
+  journalInstructions?: string;
 }
 
 export interface SubTask {

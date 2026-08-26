@@ -61,6 +61,7 @@ const TeacherJournalReview: React.FC = () => {
             id: t.id, 
             title: t.title, 
             rubricStrands: t.rubricStrands,
+            journalInstructions: t.journalInstructions,
             group: t.group,             
             start_time: t.start_time,   
             end_time: t.end_time        
@@ -218,6 +219,12 @@ const TeacherJournalReview: React.FC = () => {
                     <div className="flex-1 p-6 bg-white border-b md:border-b-0 md:border-r border-gray-200">
                       <div className="mb-4">
                         <h3 className="text-xl font-bold text-gray-900 mb-1">{index + 1}. {task.title}</h3>
+                        {task.journalInstructions && (
+                          <div className="bg-purple-50 border-l-4 border-purple-500 p-3 mb-4 rounded-r">
+                            <p className="text-xs font-bold text-purple-800 uppercase tracking-wider mb-1">Prompt</p>
+                            <p className="text-sm text-purple-900 whitespace-pre-wrap">{task.journalInstructions}</p>
+                          </div>
+                        )}
                         <p className="text-xs text-gray-400 font-mono">
                           Last Edited: {sub?.lastEdited ? new Date(sub.lastEdited).toLocaleString() : 'No submission yet'}
                         </p>

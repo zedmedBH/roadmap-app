@@ -165,7 +165,8 @@ const StudentTaskBank: React.FC = () => {
           dependencies: selectedTemplate.dependencies || [],
           status: 'incomplete',
           unclaimed: false,
-          claimedRoles: {}
+          claimedRoles: {},
+          journalInstructions: selectedTemplate.journalInstructions || '',
         });
 
         if (selectedTemplate.subtasks && selectedTemplate.subtasks.length > 0) {

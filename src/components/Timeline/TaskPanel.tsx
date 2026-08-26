@@ -38,6 +38,7 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups, editTask
   const [resources, setResources] = useState<Resource[]>([]);
   const [newResourceTitle, setNewResourceTitle] = useState('');
   const [newResourceUrl, setNewResourceUrl] = useState('');
+  const [journalInstructions, setJournalInstructions] = useState('');
   
   const [existingTemplates, setExistingTemplates] = useState<{id: string, title: string}[]>([]);
   const [selectedDependencies, setSelectedDependencies] = useState<string[]>([]);
@@ -57,6 +58,7 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups, editTask
       setColor(editTask.color || TASK_COLORS[0].value);
       setSubTasks(editTask.subtasks || []);
       setSelectedDependencies(editTask.dependencies || []);
+      setJournalInstructions(editTask.journalInstructions || '');
       
       if (editTask.rubricStrands) {
         setSelectedRubrics(editTask.rubricStrands.map((r: any) => ({
@@ -75,6 +77,7 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups, editTask
       setColor(TASK_COLORS[0].value);
       setSubTasks([]);
       setSelectedDependencies([]);
+      setJournalInstructions('');
       setSelectedRubrics([]);
     }
   }, [editTask, isOpen]);
@@ -180,6 +183,7 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups, editTask
           subtasks: finalSubTasks,
           dependencies: selectedDependencies,
           rubricStrands: selectedStrandsToEmbed,
+          journalInstructions: journalInstructions.trim(),
         });
 
         // Cascade updates to all active timeline copies globally
@@ -192,7 +196,8 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups, editTask
             resources: resources,            
             color: color,
             dependencies: selectedDependencies,
-            rubricStrands: selectedStrandsToEmbed
+            rubricStrands: selectedStrandsToEmbed,
+            journalInstructions: journalInstructions.trim()
           })
         );
         await Promise.all(updatePromises);
@@ -209,7 +214,8 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups, editTask
           rubricStrands: selectedStrandsToEmbed,
           isBroadcasted: !isTemplate,
           visibleIn: activeClassId ? [activeClassId] : [],
-          createdAt: Date.now()
+          createdAt: Date.now(),
+          journalInstructions: journalInstructions.trim()
         });
 
         if (!isTemplate) {
@@ -227,7 +233,8 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups, editTask
             broadcastId: broadcastId, 
             dependencies: selectedDependencies,
             rubricStrands: selectedStrandsToEmbed,
-            claimedRoles: {}
+            claimedRoles: {},
+            journalInstructions: journalInstructions.trim()
           };
 
           const targetGroups = taskType === 'team' 
@@ -364,6 +371,17 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups, editTask
                     <button type="button" onClick={handleAddResource} className="bg-gray-200 text-gray-700 px-3 py-1.5 rounded text-sm hover:bg-gray-300">Add</button>
                   </div>
                 </div>
+              </div>
+
+              {/* Journal Instructions */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Journal Instructions (Optional)</label>
+                <textarea
+                  value={journalInstructions}
+                  onChange={e => setJournalInstructions(e.target.value)}
+                  className="w-full border border-purple-300 bg-purple-50 p-2 rounded focus:ring-purple-500 outline-none min-h-[80px]"
+                  placeholder="Provide specific prompts or questions for the student to answer in their journal entry..."
+                />
               </div>
 
               {/* ASSESSMENT CRITERIA & MAX BANDS SECTION */}
