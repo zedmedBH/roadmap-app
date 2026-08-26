@@ -2,26 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, where, onSnapshot, doc, setDoc, getDocs } from 'firebase/firestore';
 import Latex from 'react-latex-next';
 import 'katex/dist/katex.min.css';
-import { FiGithub } from 'react-icons/fi'; // <-- Imported the GitHub icon
+import { FiGithub } from 'react-icons/fi';
 import { db } from '../../config/firebase';
 import { useAuth, type AppUser } from '../../context/AuthContext';
-
-interface TimelineTask {
-  id: string;
-  title: string;
-  rubricStrands?: any[];
-}
-
-interface Submission {
-  textResponse: string;
-  imageUrls?: string[];
-  lastEdited: number;
-}
-
-interface FeedbackState {
-  scores: Record<string, number>;
-  comment: string;
-}
+import type { TimelineItem, Submission, Feedback } from '../../types';
 
 // Extend AppUser locally so TypeScript knows about the githubRepo
 interface StudentWithRepo extends AppUser {
@@ -32,9 +16,9 @@ const TeacherJournalReview: React.FC = () => {
   const { user, activeClassId } = useAuth();
   const [students, setStudents] = useState<StudentWithRepo[]>([]);
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
-  const [tasks, setTasks] = useState<TimelineTask[]>([]);
+  const [tasks, setTasks] = useState<TimelineItem[]>([]);
   const [submissions, setSubmissions] = useState<Record<string, Submission>>({});
-  const [draftFeedbacks, setDraftFeedbacks] = useState<Record<string, FeedbackState>>({});
+  const [draftFeedbacks, setDraftFeedbacks] = useState<Record<string, Feedback>>({});
   const [loadingStudent, setLoadingStudent] = useState(false);
   const [savingTaskId, setSavingTaskId] = useState<string | null>(null);
 
@@ -73,7 +57,15 @@ const TeacherJournalReview: React.FC = () => {
         const activeTasks = snap.docs
           .map(d => ({ id: d.id, ...d.data() } as any))
           .filter(t => !t.unclaimed && (t.group === activeGroupId || t.group === selectedStudentId))
-          .map(t => ({ id: t.id, title: t.title, rubricStrands: t.rubricStrands }));
+          .map(t => ({ 
+            id: t.id, 
+            title: t.title, 
+            rubricStrands: t.rubricStrands,
+            group: t.group,             
+            start_time: t.start_time,   
+            end_time: t.end_time        
+          } as TimelineItem));
+
         setTasks(activeTasks);
       });
 
@@ -93,7 +85,7 @@ const TeacherJournalReview: React.FC = () => {
 
       const qFeedback = query(collection(db, 'feedback'), where('userId', '==', selectedStudentId));
       unsubFeedback = onSnapshot(qFeedback, (snap) => {
-        const fb: Record<string, FeedbackState> = {};
+        const fb: Record<string, Feedback> = {};
         snap.forEach(d => {
           const data = d.data();
           fb[data.timelineItemId] = {

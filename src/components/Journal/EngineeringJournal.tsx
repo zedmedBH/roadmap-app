@@ -8,23 +8,7 @@ import { FiChevronDown, FiChevronUp, FiGithub, FiEdit2, FiCheck } from 'react-ic
 import { db } from '../../config/firebase';
 import { useAuth } from '../../context/AuthContext';
 import { uploadFileToDrive, createDriveFolder } from '../../utils/driveUpload';
-
-interface TimelineTask {
-  id: string;
-  title: string;
-  rubricStrands?: any[];
-}
-
-interface Submission {
-  textResponse: string;
-  imageUrls?: string[];
-  lastEdited: number;
-}
-
-interface Feedback {
-  scores: Record<string, number>; 
-  comment: string;
-}
+import type { TimelineItem, Submission, Feedback } from '../../types';
 
 const CRITERIA_NAMES: Record<string, string> = {
   A: "Inquiring and Analyzing",
@@ -36,7 +20,7 @@ const CRITERIA_NAMES: Record<string, string> = {
 const EngineeringJournal: React.FC = () => {
   const { user, loginWithGoogle } = useAuth();
   const [mode, setMode] = useState<'edit' | 'preview'>('edit');
-  const [tasks, setTasks] = useState<TimelineTask[]>([]);
+  const [tasks, setTasks] = useState<TimelineItem[]>([]);
   const [submissions, setSubmissions] = useState<Record<string, Submission>>({});
   const [feedbacks, setFeedbacks] = useState<Record<string, Feedback>>({});
   const [loading, setLoading] = useState(true);
@@ -84,8 +68,15 @@ const EngineeringJournal: React.FC = () => {
       const activeTasks = snap.docs
         .map(d => ({ id: d.id, ...d.data() } as any))
         .filter(t => !t.unclaimed && (t.group === activeGroupId || t.group === user.id))
-        .map(t => ({ id: t.id, title: t.title, rubricStrands: t.rubricStrands }));
-      
+        .map(t => ({ 
+          id: t.id, 
+          title: t.title, 
+          rubricStrands: t.rubricStrands,
+          group: t.group,
+          start_time: t.start_time,
+          end_time: t.end_time
+        } as TimelineItem));
+            
       setTasks(activeTasks);
     });
 

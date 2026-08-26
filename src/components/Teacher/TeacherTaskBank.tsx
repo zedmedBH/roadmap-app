@@ -4,18 +4,7 @@ import { collection, query, onSnapshot, doc, deleteDoc, updateDoc, getDocs, wher
 import { db } from '../../config/firebase';
 import { useAuth } from '../../context/AuthContext';
 import TaskPanel from '../Timeline/TaskPanel';
-
-interface TaskTemplate {
-  id: string;
-  title: string;
-  color: string;
-  taskType: 'team' | 'individual';
-  isBroadcasted?: boolean;
-  visibleIn?: string[];
-  subtasks?: string[];
-  dependencies?: string[];
-  rubricStrands?: any[];
-}
+import type { TaskTemplate } from '../../types';
 
 const TASK_COLORS = [
   { label: 'Blue Phase', value: '#2196F3' },
@@ -247,7 +236,6 @@ const TeacherTaskBank: React.FC = () => {
         </div>
       )}
 
-      {/* RE-PURPOSED UNIFIED TASK PANEL */}
       <TaskPanel 
         isOpen={isPanelOpen} 
         onClose={handleClosePanel} 

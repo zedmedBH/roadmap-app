@@ -4,20 +4,7 @@ import { collection, query, onSnapshot, addDoc, deleteDoc, updateDoc, doc } from
 import { db } from '../../config/firebase';
 import { useAuth } from '../../context/AuthContext';
 
-export interface RubricBand {
-  levels: string;
-  officialDescriptor: string;
-  studentExemplar: string;
-}
-
-export interface RubricStrand {
-  id?: string;
-  teacherId: string;
-  criterion: 'A' | 'B' | 'C' | 'D';
-  strand: 'i' | 'ii' | 'iii' | 'iv';
-  title: string;
-  bands: RubricBand[];
-}
+import type { RubricBand, RubricStrand } from '../../types';
 
 const DEFAULT_BANDS: RubricBand[] = [
   { levels: '1-2', officialDescriptor: '', studentExemplar: '' },

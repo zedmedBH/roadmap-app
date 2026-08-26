@@ -4,32 +4,13 @@ import { collection, addDoc, onSnapshot, query, where, getDocs, updateDoc, doc }
 import { db } from '../../config/firebase';
 import { useAuth } from '../../context/AuthContext';
 import dayjs from 'dayjs';
+import type { Resource, RubricStrand, SelectedRubric } from '../../types';
 
 interface TaskPanelProps {
   isOpen: boolean;
   onClose: () => void;
   groups: { id: string; title: string }[];
   editTask?: any | null;
-}
-
-interface RubricBand {
-  levels: string;
-  officialDescriptor: string;
-  studentExemplar: string;
-}
-
-interface RubricStrand {
-  id: string;
-  teacherId?: string;
-  criterion: string;
-  strand: string;
-  title: string;
-  bands: RubricBand[];
-}
-
-interface SelectedRubric {
-  id: string;
-  maxBand: number;
 }
 
 const TASK_COLORS = [
@@ -52,6 +33,11 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups, editTask
   
   const [subTasks, setSubTasks] = useState<string[]>([]);
   const [newSubTask, setNewSubTask] = useState('');
+
+  const [description, setDescription] = useState('');
+  const [resources, setResources] = useState<Resource[]>([]);
+  const [newResourceTitle, setNewResourceTitle] = useState('');
+  const [newResourceUrl, setNewResourceUrl] = useState('');
   
   const [existingTemplates, setExistingTemplates] = useState<{id: string, title: string}[]>([]);
   const [selectedDependencies, setSelectedDependencies] = useState<string[]>([]);
@@ -64,6 +50,8 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups, editTask
   useEffect(() => {
     if (editTask) {
       setTitle(editTask.title || '');
+      setDescription(editTask.description || ''); 
+      setResources(editTask.resources || []);     
       setIsTemplate(!editTask.isBroadcasted);
       setTaskType(editTask.taskType || 'team');
       setColor(editTask.color || TASK_COLORS[0].value);
@@ -80,6 +68,8 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups, editTask
       }
     } else {
       setTitle('');
+      setDescription(''); 
+      setResources([]);   
       setIsTemplate(true);
       setTaskType('team');
       setColor(TASK_COLORS[0].value);
@@ -123,6 +113,18 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups, editTask
     setSubTasks(subTasks.filter((_, i) => i !== index));
   };
 
+  const handleAddResource = () => {
+    if (newResourceTitle.trim() && newResourceUrl.trim()) {
+      setResources([...resources, { title: newResourceTitle.trim(), url: newResourceUrl.trim() }]);
+      setNewResourceTitle('');
+      setNewResourceUrl('');
+    }
+  };
+
+  const handleRemoveResource = (index: number) => {
+    setResources(resources.filter((_, i) => i !== index));
+  };
+
   const toggleDependency = (templateId: string) => {
     setSelectedDependencies(prev => 
       prev.includes(templateId) 
@@ -145,7 +147,10 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups, editTask
 
   const handleAddTask = async (e: React.SyntheticEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    if (!title.trim()) {
+      alert("Please enter a Task Title.");
+      return;
+    }
 
     const finalSubTasks = [...subTasks];
     if (newSubTask.trim()) {
@@ -169,6 +174,8 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups, editTask
         // UPDATE EXISTING TASK
         await updateDoc(doc(db, 'taskTemplates', editTask.id), {
           title: title.trim(),
+          description: description.trim(), 
+          resources: resources,            
           color: color,
           subtasks: finalSubTasks,
           dependencies: selectedDependencies,
@@ -181,6 +188,8 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups, editTask
         const updatePromises = snap.docs.map(tDoc => 
           updateDoc(doc(db, 'timelineItems', tDoc.id), {
             title: title.trim(),
+            description: description.trim(), 
+            resources: resources,            
             color: color,
             dependencies: selectedDependencies,
             rubricStrands: selectedStrandsToEmbed
@@ -191,6 +200,8 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups, editTask
         // CREATE NEW TASK
         const templateDocRef = await addDoc(collection(db, 'taskTemplates'), {
           title: title.trim(),
+          description: description.trim(), 
+          resources: resources,            
           color: color,
           taskType: taskType,
           subtasks: finalSubTasks,
@@ -205,6 +216,8 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups, editTask
           const broadcastId = Date.now().toString();
           const baseTaskData = {
             title: title.trim(),
+            description: description.trim(),
+            resources: resources,            
             start_time: dayjs(startDate).valueOf(),
             end_time: dayjs(endDate).valueOf(),
             color: color,
@@ -213,7 +226,8 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups, editTask
             templateId: templateDocRef.id,
             broadcastId: broadcastId, 
             dependencies: selectedDependencies,
-            rubricStrands: selectedStrandsToEmbed 
+            rubricStrands: selectedStrandsToEmbed,
+            claimedRoles: {}
           };
 
           const targetGroups = taskType === 'team' 
@@ -306,6 +320,52 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups, editTask
                 <input type="text" value={title} onChange={e => setTitle(e.target.value)} className="w-full border border-gray-300 p-2 rounded focus:ring-blue-500 outline-none" required placeholder="e.g. Requirement Gathering" />
               </div>
 
+              {/* DESCRIPTION SECTION */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <textarea
+                  value={description}
+                  onChange={e => setDescription(e.target.value)}
+                  className="w-full border border-gray-300 p-2 rounded focus:ring-blue-500 outline-none min-h-[80px]"
+                  placeholder="Explain the goals and requirements for this task..."
+                />
+              </div>
+
+              {/* RESOURCES SECTION */}
+              <div className="bg-gray-50 p-3 rounded border border-gray-200">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Helpful Resources</label>
+                <ul className="space-y-2 mb-3">
+                  {resources.map((res, i) => (
+                    <li key={i} className="flex justify-between items-center text-sm bg-white border border-gray-200 px-2 py-1.5 rounded">
+                      <a href={res.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline truncate mr-2">
+                        {res.title}
+                      </a>
+                      <button type="button" onClick={() => handleRemoveResource(i)} className="text-red-500 hover:text-red-700 font-bold px-1">&times;</button>
+                    </li>
+                  ))}
+                </ul>
+                <div className="flex flex-col gap-2">
+                  <input
+                    type="text"
+                    value={newResourceTitle}
+                    onChange={e => setNewResourceTitle(e.target.value)}
+                    placeholder="Link Title (e.g. Build Guide)"
+                    className="w-full border border-gray-300 p-1.5 text-sm rounded outline-none focus:border-blue-500"
+                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      value={newResourceUrl}
+                      onChange={e => setNewResourceUrl(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddResource(); } }}
+                      placeholder="https://..."
+                      className="flex-1 border border-gray-300 p-1.5 text-sm rounded outline-none focus:border-blue-500"
+                    />
+                    <button type="button" onClick={handleAddResource} className="bg-gray-200 text-gray-700 px-3 py-1.5 rounded text-sm hover:bg-gray-300">Add</button>
+                  </div>
+                </div>
+              </div>
+
               {/* ASSESSMENT CRITERIA & MAX BANDS SECTION */}
               {rubricBank.length > 0 && (
                 <div className="bg-purple-50 p-3 rounded border border-purple-100">
@@ -323,7 +383,7 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups, editTask
                             <input 
                               type="checkbox" 
                               checked={isSelected} 
-                              onChange={() => toggleRubric(r.id)} 
+                              onChange={() => toggleRubric(r.id!)} 
                               className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500 mt-0.5" 
                             />
                             <div className="flex flex-col">
@@ -338,7 +398,7 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups, editTask
                               <span className="text-xs font-semibold text-gray-500 uppercase">Max Band:</span>
                               <select 
                                 value={selectedData?.maxBand || 8}
-                                onChange={(e) => updateMaxBand(r.id, parseInt(e.target.value))}
+                                onChange={(e) => updateMaxBand(r.id!, parseInt(e.target.value))}
                                 className="text-xs border border-purple-300 rounded p-1 outline-none focus:border-purple-500 bg-white"
                               >
                                 <option value={2}>1-2</option>
@@ -427,7 +487,12 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups, editTask
         </div>
         <div className="p-6 border-t bg-gray-50 flex justify-end gap-3">
           <button type="button" onClick={onClose} className="px-4 py-2 text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50 transition-colors">Cancel</button>
-          <button type="submit" form="task-form" disabled={isSubmitting} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-blue-300 transition-colors font-medium">
+          <button 
+            type="button" 
+            onClick={handleAddTask} 
+            disabled={isSubmitting} 
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-blue-300 transition-colors font-medium"
+          >
             {isSubmitting ? 'Saving...' : (editTask ? 'Save Changes' : (isTemplate ? 'Add to Bank' : 'Broadcast Task'))}
           </button>
         </div>

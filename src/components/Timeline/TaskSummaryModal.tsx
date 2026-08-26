@@ -1,9 +1,10 @@
 // src/components/Timeline/TaskSummaryModal.tsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { doc, updateDoc, collection, onSnapshot, query, orderBy, where, getDocs } from 'firebase/firestore';
+import { doc, updateDoc, collection, onSnapshot, query, orderBy, where, getDocs, getDoc, documentId } from 'firebase/firestore';
 import { db } from '../../config/firebase';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth, type AppUser } from '../../context/AuthContext';
+import type { SubTask } from '../../types';
 
 interface TaskSummaryModalProps {
   isOpen: boolean;
@@ -11,19 +12,14 @@ interface TaskSummaryModalProps {
   task: any | null;
 }
 
-interface SubTask {
-  id: string;
-  title: string;
-  completed: boolean;
-}
-
 const STATUS_OPTIONS = ['incomplete', 'in-progress', 'complete'];
+const TEAM_ROLES = ["Lead Builder", "Support Builder", "Parts Manager", "Documentation Lead"]; // NEW
 
 const TaskSummaryModal: React.FC<TaskSummaryModalProps> = ({ isOpen, onClose, task }) => {
   const { user } = useAuth();
   const [isUpdating, setIsUpdating] = useState(false);
   const [subTasks, setSubTasks] = useState<SubTask[]>([]);
-
+  const [groupMembers, setGroupMembers] = useState<AppUser[]>([]); // NEW
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -38,11 +34,67 @@ const TaskSummaryModal: React.FC<TaskSummaryModalProps> = ({ isOpen, onClose, ta
     return () => unsubscribe();
   }, [isOpen, task?.id]);
 
+  useEffect(() => {
+    if (!isOpen || !task || task.taskType !== 'team') return;
+
+    const fetchGroupMembers = async () => {
+      try {
+        // For team tasks, task.group stores the teamId
+        const groupRef = doc(db, 'groups', task.group);
+        const groupSnap = await getDoc(groupRef);
+        
+        if (groupSnap.exists()) {
+          const memberIds = groupSnap.data().memberIds || [];
+          if (memberIds.length > 0) {
+            // Fetch the user profiles for these IDs
+            const usersQ = query(collection(db, 'users'), where(documentId(), 'in', memberIds));
+            const usersSnap = await getDocs(usersQ);
+            setGroupMembers(usersSnap.docs.map(d => ({ id: d.id, ...d.data() } as AppUser)));
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching group members:", err);
+      }
+    };
+
+    fetchGroupMembers();
+  }, [isOpen, task]);
+
   if (!isOpen || !task) return null;
 
   const canEdit = user?.role === 'teacher' || 
                   task.userId === user?.id || 
                   (task.taskType === 'team' && task.teamId === user?.groupId);
+
+  const handleRoleChange = async (role: string, studentId: string) => {
+    if (!canEdit || !task) return;
+
+    // Clone current roles or default to an empty object
+    const updatedRoles = { ...(task.claimedRoles || {}) };
+
+    if (studentId === "") {
+      // Unassign the role
+      delete updatedRoles[role];
+    } else {
+      // 1. Check if the student is already in another role and remove them
+      Object.keys(updatedRoles).forEach(existingRole => {
+        if (existingRole !== role && updatedRoles[existingRole] === studentId) {
+          delete updatedRoles[existingRole];
+        }
+      });
+      // 2. Assign to the new role
+      updatedRoles[role] = studentId;
+    }
+
+    setIsUpdating(true);
+    try {
+      await updateDoc(doc(db, 'timelineItems', task.id), { claimedRoles: updatedRoles });
+    } catch (error) {
+      console.error("Error updating roles:", error);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   const handleStatusChange = async (newStatus: string) => {
     if (!canEdit) return;
@@ -145,6 +197,62 @@ const TaskSummaryModal: React.FC<TaskSummaryModalProps> = ({ isOpen, onClose, ta
               ))}
             </div>
           </div>
+
+          {/* Description */}
+          {task.description && (
+            <div>
+              <h4 className="text-sm font-semibold text-gray-600 mb-2 uppercase tracking-wide">Description</h4>
+              <p className="text-sm text-gray-800 bg-gray-50 p-3 rounded-lg border border-gray-200 whitespace-pre-wrap">
+                {task.description}
+              </p>
+            </div>
+          )}
+
+          {/* Resources */}
+          {task.resources && task.resources.length > 0 && (
+            <div>
+              <h4 className="text-sm font-semibold text-gray-600 mb-2 uppercase tracking-wide">Resources</h4>
+              <ul className="flex flex-col gap-2">
+                {task.resources.map((res: any, i: number) => (
+                  <li key={i}>
+                    <a href={res.url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline flex items-center gap-2">
+                      🔗 {res.title}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Team Roles */}
+          {task.taskType === 'team' && groupMembers.length > 0 && (
+            <div>
+              <h4 className="text-sm font-semibold text-gray-600 mb-2 uppercase tracking-wide">Team Roles</h4>
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-3">
+                {TEAM_ROLES.map(role => {
+                  const currentAssignee = task.claimedRoles?.[role] || "";
+                  return (
+                    <div key={role} className="flex justify-between items-center gap-4">
+                      <span className="text-sm font-medium text-gray-700 w-1/2">{role}</span>
+                      <select
+                        value={currentAssignee}
+                        onChange={(e) => handleRoleChange(role, e.target.value)}
+                        disabled={!canEdit || isUpdating}
+                        className="w-1/2 border border-gray-300 rounded p-1.5 text-sm bg-white outline-none focus:border-blue-500 disabled:opacity-60"
+                      >
+                        <option value="">-- Unassigned --</option>
+                        {groupMembers.map(member => (
+                          <option key={member.id} value={member.id}>
+                            {member.firstName} {member.lastName}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Sub-tasks Section (Read Only) */}
           <div>

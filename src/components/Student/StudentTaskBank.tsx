@@ -4,17 +4,7 @@ import { collection, getDocs, addDoc, query, onSnapshot, where, updateDoc, doc }
 import { db } from '../../config/firebase';
 import { useAuth } from '../../context/AuthContext';
 import dayjs from 'dayjs';
-
-interface TaskTemplate {
-  id: string;
-  title: string;
-  color: string;
-  taskType?: 'team' | 'individual';
-  subtasks?: string[];
-  isBroadcasted?: boolean;
-  dependencies?: string[];
-  visibleIn?: string[];
-}
+import type { TaskTemplate } from '../../types';
 
 const TASK_COLORS = [
   { label: 'Blue Phase', value: '#2196F3' },
@@ -162,6 +152,8 @@ const StudentTaskBank: React.FC = () => {
         // CREATE FRESH
         const docRef = await addDoc(collection(db, 'timelineItems'), {
           title: selectedTemplate.title,
+          description: selectedTemplate.description || '',
+          resources: selectedTemplate.resources || [],
           group: assignedGroupRow,
           color: selectedTemplate.color,
           start_time: dayjs(startDate).valueOf(),
@@ -172,7 +164,8 @@ const StudentTaskBank: React.FC = () => {
           taskType: selectedTemplate.taskType || 'team',
           dependencies: selectedTemplate.dependencies || [],
           status: 'incomplete',
-          unclaimed: false
+          unclaimed: false,
+          claimedRoles: {}
         });
 
         if (selectedTemplate.subtasks && selectedTemplate.subtasks.length > 0) {
@@ -295,6 +288,26 @@ const StudentTaskBank: React.FC = () => {
               <div>
                 <p className="font-bold text-gray-800 text-lg">{selectedTemplate.title}</p>
               </div>
+
+              {selectedTemplate.description && (
+                <div className="mb-4">
+                  <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Description</h4>
+                  <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded border border-gray-200 whitespace-pre-wrap">
+                    {selectedTemplate.description}
+                  </p>
+                </div>
+              )}
+
+              {selectedTemplate.subtasks && selectedTemplate.subtasks.length > 0 && (
+                <div className="mb-4">
+                  <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Sub-tasks ({selectedTemplate.subtasks.length})</h4>
+                  <ul className="list-disc list-inside text-sm text-gray-700 bg-gray-50 p-3 rounded border border-gray-200 space-y-1">
+                    {selectedTemplate.subtasks.map((st, i) => (
+                      <li key={i}>{st}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div>

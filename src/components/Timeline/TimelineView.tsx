@@ -9,6 +9,7 @@ import { useAuth, type AppUser } from '../../context/AuthContext';
 import TaskPanel from './TaskPanel';
 import TaskSummaryModal from './TaskSummaryModal';
 import { FiMaximize2 } from "react-icons/fi";
+import type { TimelineItem } from '../../types'
 
 export interface RoadmapGroup {
   id: string;
@@ -16,22 +17,6 @@ export interface RoadmapGroup {
   order: number;
 }
 
-export interface RoadmapItem {
-  id: string;
-  group: string;
-  title: string;
-  start_time: number;
-  end_time: number;
-  color?: string;
-  userId?: string;
-  status?: string;
-  taskType?: 'team' | 'individual';
-  teamId?: string;
-  templateId?: string;
-  unclaimed?: boolean;
-  broadcastId?: string;
-  rubricStrands?: any[];
-}
 
 const TimelineView: React.FC = () => {
   const { user, activeClassId, setActiveClassId } = useAuth();
@@ -71,7 +56,7 @@ const TimelineView: React.FC = () => {
       const activeGroupId = user?.groupId || 'unassigned-team';
       
       const fetchedItems = snapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() } as RoadmapItem))
+        .map(doc => ({ id: doc.id, ...doc.data() } as TimelineItem))
         .filter(data => !data.unclaimed) 
         .filter(data => {
           if (user?.role === 'teacher') return true; 
@@ -93,6 +78,11 @@ const TimelineView: React.FC = () => {
             templateId: data.templateId,
             broadcastId: data.broadcastId,
             rubricStrands: data.rubricStrands,
+            description: data.description,   
+            resources: data.resources,       
+            claimedRoles: data.claimedRoles, 
+            dependencies: data.dependencies, 
+            teamId: data.teamId,
             // Explicitly set permissions here so the library disables the cursor natively
             canMove: !isMasterTaskForStudent,
             canResize: !isMasterTaskForStudent ? 'both' : false,
