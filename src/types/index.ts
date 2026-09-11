@@ -81,3 +81,14 @@ export interface SelectedRubric {
   id: string;
   maxBand: number;
 }
+
+export interface CourseResource {
+  id?: string;
+  teacherId: string;
+  title: string;
+  description: string;
+  url: string;
+  resourceType: 'link' | 'document' | 'video';
+  visibleIn: string[];
+  createdAt: number;
+}

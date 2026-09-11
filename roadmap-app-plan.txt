@@ -5,7 +5,8 @@ Tech Stack: React (TypeScript), Vite, React Router (using HashRouter), Tailwind 
 Backend / Database: Firebase (Google SSO Authentication, Firestore Database, Google Drive REST API for file/image storage).
 
 2. Firestore Data Model & Security (RBAC)
-Security Rules: Strict RBAC implemented. Teachers have global write access to classes, groups, and master banks. Students only have write access to their own profile, their claimed timeline tasks, and their journal submissions. Reads require authentication.
+Security Rules:
+Strict RBAC implemented. Teachers have global write access to classes, groups, master banks, and course resources. Students only have write access to their own profile, their claimed timeline tasks, and their journal submissions. Student reads for course resources are restricted to items where their classId is in the visibleIn array. Reads require authentication.
 
 Schema:
 Classes: { id, name, teacherId, term, driveFolderId }
@@ -16,15 +17,19 @@ TimelineItems (Active Tasks): { id, templateId, title, group (userId or teamId),
 Submissions (Journal Entries): { id, timelineItemId, userId, textResponse, imageUrls: string[], timestamp, lastEdited }
 Rubrics: { id, teacherId, criterion, strand, title, bands: Array<{levels, officialDescriptor, studentExemplar}> }
 Feedback: { id, timelineItemId, userId, teacherId, scores: Record<string, number>, comment: string, updatedAt: number }
+CourseResources (Static Files/Links): { id, teacherId, title, description, url, resourceType: 'link' | 'document' | 'video', visibleIn: string[], createdAt: number }
 
 3. UI/UX Architecture & Routing
 Navigation (<Navigation />): Global top bar handling Google SSO logout, dynamic Welcome messages, and a Teacher "View as Student" spoofing dropdown.
+
 Teacher Dashboard: Tabbed interface hiding complex menus. Tabs include:
   1. Master Roadmap (TimelineView)
   2. Journal Grading (TeacherJournalReview)
   3. Task & Rubric Banks (TeacherTaskBank, TeacherRubricBank)
-  4. Class Setup & Admin (ClassManagement, TeacherSettings, StudentRosterImport, GroupManagement)
-Student Dashboard: Unified view containing a prominent "Open Journal" banner, their TimelineView, and the StudentTaskBank.
+  4. Class Resources (TeacherResourceBank)
+  5. Class Setup & Admin (ClassManagement, TeacherSettings, StudentRosterImport, GroupManagement)
+
+Student Dashboard: Unified view containing a prominent "Open Journal" banner, their TimelineView, the StudentResourceHub, and the StudentTaskBank.
 
 4. Development Roadmap & Implementation Status
 Phase 1: Environment & Infrastructure (Completed)
@@ -58,3 +63,8 @@ Phase 6: The Engineering Journal (Execution Engine) (Completed)
 Phase 7: Assessment & Feedback (Completed)
 - TeacherJournalReview: Select a student, view their GitHub link, and read compiled Preview documents.
 - Interactive Grading: Teachers click rubric band boxes to lock in scores and leave comments, which sync to the Student's Preview Mode.
+
+Phase 8: Static Class Resources (Completed)
+- CourseResources Firestore schema established with class-specific visibility toggling.
+- TeacherResourceBank: Full CRUD operations for global links and static materials.
+- StudentResourceHub: Read-only grid filtering resources dynamically based on the student's assigned classId.

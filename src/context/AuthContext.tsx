@@ -1,7 +1,7 @@
 // src/context/AuthContext.tsx
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { type User as FirebaseUser, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, setDoc, collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, where, getDocs, onSnapshot, deleteDoc } from 'firebase/firestore';
 import { auth, googleProvider, db } from '../config/firebase';
 
 export interface AppUser {
@@ -48,6 +48,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const querySnapshot = await getDocs(q);
 
       if (!querySnapshot.empty) {
+        // 1. MATCH FOUND: Extract the pre-populated data
         const existingDoc = querySnapshot.docs[0];
         const existingData = existingDoc.data();
 
@@ -57,17 +58,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           firstName: existingData.firstName || firebaseUser.displayName?.split(' ')[0] || '',
           lastName: existingData.lastName || firebaseUser.displayName?.split(' ').slice(1).join(' ') || '',
           role: existingData.role || 'student',
-          classId: existingData.classId,
+          classId: existingData.classId, // Inherits the class
+          groupId: existingData.groupId, // Inherits the group if already assigned
         };
 
+        // 2. Create the correctly linked user document
         await setDoc(userRef, newAppUser);
+        
+        // 3. Delete the old pre-populated document to prevent duplicates
+        await deleteDoc(doc(db, 'users', existingDoc.id));
+
       } else {
+        // NO MATCH: Brand new user
         const newUser: AppUser = {
           id: firebaseUser.uid,
           email: firebaseUser.email || '',
           firstName: firebaseUser.displayName?.split(' ')[0] || '',
           lastName: firebaseUser.displayName?.split(' ').slice(1).join(' ') || '',
-          role: 'teacher',
+          role: 'student', // SECURITY FIX: Defaulting to student, not teacher
         };
         await setDoc(userRef, newUser);
       }

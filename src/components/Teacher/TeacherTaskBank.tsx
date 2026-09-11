@@ -7,10 +7,10 @@ import TaskPanel from '../Timeline/TaskPanel';
 import type { TaskTemplate } from '../../types';
 
 const TASK_COLORS = [
-  { label: 'Blue Phase', value: '#2196F3' },
+  { label: 'Build Phase', value: '#2196F3' },
   { label: 'Green Phase', value: '#4CAF50' },
-  { label: 'Orange Phase', value: '#FF9800' },
-  { label: 'Purple Phase', value: '#9C27B0' },
+  { label: 'Coding Phase', value: '#FF9800' },
+  { label: 'Planning Phase', value: '#9C27B0' },
   { label: 'Red Phase', value: '#F44336' },
 ];
 

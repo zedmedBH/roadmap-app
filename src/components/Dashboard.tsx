@@ -12,11 +12,13 @@ import TeacherSettings from './Teacher/TeacherSettings';
 import ClassManagement from './Teacher/ClassManagement';
 import TeacherRubricBank from './Teacher/TeacherRubricBank';
 import TeacherJournalReview from './Teacher/TeacherJournalReview';
+import TeacherResourceBank from './Teacher/TeacherResourceBank';
+import StudentResourceHub from './Student/StudentResourceHub';
 
 const Dashboard: React.FC = () => {
   // logout removed from here since it's handled in App.tsx
   const { user, activeClassId, setActiveClassId } = useAuth();
-  const [activeTab, setActiveTab] = useState<'roadmap' | 'grading' | 'curriculum' | 'setup'>('roadmap');
+  const [activeTab, setActiveTab] = useState<'roadmap' | 'grading' | 'curriculum' | 'resources' | 'setup'>('roadmap');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -41,11 +43,12 @@ const Dashboard: React.FC = () => {
           {/* Tab Navigation */}
           <div className="flex bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
             {[
-              { id: 'roadmap', label: 'Master Roadmap' },
-              { id: 'grading', label: 'Journal Grading' },
-              { id: 'curriculum', label: 'Rubrics' },
-              { id: 'setup', label: 'Class Setup & Admin' }
-            ].map((tab) => (
+            { id: 'roadmap', label: 'Master Roadmap' },
+            { id: 'grading', label: 'Journal Grading' },
+            { id: 'curriculum', label: 'Rubrics' },
+            { id: 'resources', label: 'Class Resources' },
+            { id: 'setup', label: 'Class Setup & Admin' }
+          ].map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
@@ -77,6 +80,7 @@ const Dashboard: React.FC = () => {
               )}
             {activeTab === 'grading' && activeClassId && <TeacherJournalReview />}
             {activeTab === 'curriculum' && activeClassId && <TeacherRubricBank />}
+            {activeTab === 'resources' && activeClassId && <TeacherResourceBank />}
             {activeTab === 'setup' && (
               <div className="space-y-6">
                 {activeClassId && (
@@ -111,6 +115,7 @@ const Dashboard: React.FC = () => {
             </button>
           </div>
           <TimelineView />
+          <StudentResourceHub />
           <StudentTaskBank />
         </div>
       )}

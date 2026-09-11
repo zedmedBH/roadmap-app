@@ -88,5 +88,11 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow write: if isTeacher();
     }
+    
+    // COURSE RESOURCES: Teachers manage resources; students view them.
+    match /courseResources/{resourceId} {
+      allow read: if isAuthenticated();
+      allow write: if isTeacher();
+    }
   }
 }
