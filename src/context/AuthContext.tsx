@@ -1,7 +1,7 @@
 // src/context/AuthContext.tsx
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { type User as FirebaseUser, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, setDoc, collection, query, where, getDocs, onSnapshot, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, where, getDocs, onSnapshot, deleteDoc, updateDoc, arrayRemove, arrayUnion } from 'firebase/firestore';
 import { auth, googleProvider, db } from '../config/firebase';
 
 export interface AppUser {
@@ -51,22 +51,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // 1. MATCH FOUND: Extract the pre-populated data
         const existingDoc = querySnapshot.docs[0];
         const existingData = existingDoc.data();
+        const oldId = existingDoc.id;
+        const newId = firebaseUser.uid;
 
         const newAppUser: AppUser = {
-          id: firebaseUser.uid,
+          id: newId,
           email: firebaseUser.email || '',
           firstName: existingData.firstName || firebaseUser.displayName?.split(' ')[0] || '',
           lastName: existingData.lastName || firebaseUser.displayName?.split(' ').slice(1).join(' ') || '',
           role: existingData.role || 'student',
-          classId: existingData.classId, // Inherits the class
-          groupId: existingData.groupId, // Inherits the group if already assigned
+          classId: existingData.classId, 
         };
 
         // 2. Create the correctly linked user document
         await setDoc(userRef, newAppUser);
+
+        // 3. FIX: Search for the old ID in any groups and swap it for the new Google UID
+        const groupsRef = collection(db, 'groups');
+        const groupQuery = query(groupsRef, where('memberIds', 'array-contains', oldId));
+        const groupSnap = await getDocs(groupQuery);
+
+        if (!groupSnap.empty) {
+          const groupDoc = groupSnap.docs[0];
+          await updateDoc(doc(db, 'groups', groupDoc.id), {
+            memberIds: arrayRemove(oldId)
+          });
+          await updateDoc(doc(db, 'groups', groupDoc.id), {
+            memberIds: arrayUnion(newId)
+          });
+        }
         
-        // 3. Delete the old pre-populated document to prevent duplicates
-        await deleteDoc(doc(db, 'users', existingDoc.id));
+        // 4. Delete the old pre-populated document
+        await deleteDoc(doc(db, 'users', oldId));
 
       } else {
         // NO MATCH: Brand new user
@@ -75,7 +91,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           email: firebaseUser.email || '',
           firstName: firebaseUser.displayName?.split(' ')[0] || '',
           lastName: firebaseUser.displayName?.split(' ').slice(1).join(' ') || '',
-          role: 'student', // SECURITY FIX: Defaulting to student, not teacher
+          role: 'student', 
         };
         await setDoc(userRef, newUser);
       }
