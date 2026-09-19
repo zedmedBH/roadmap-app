@@ -1,7 +1,7 @@
 // src/App.tsx
 import { useState, useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import { db } from './config/firebase';
 import { AuthProvider, useAuth, type AppUser } from './context/AuthContext';
 import Login from './components/Login';
@@ -17,8 +17,20 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
 // Extracted Navigation to use AuthContext
 function Navigation() {
-  const { user, actualTeacherUser, setViewAsStudent, stopViewingAsStudent, logout } = useAuth();
+  const { user, actualTeacherUser, setViewAsStudent, stopViewingAsStudent, logout, activeClassId, setActiveClassId } = useAuth();
   const [students, setStudents] = useState<AppUser[]>([]);
+  const [classes, setClasses] = useState<any[]>([]);
+
+  // Fetch classes for the global dropdown
+  useEffect(() => {
+    if (user?.role === 'teacher' && !actualTeacherUser) {
+      const q = query(collection(db, 'classes'), where('teacherId', '==', user.id));
+      const unsub = onSnapshot(q, (snap) => {
+        setClasses(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      });
+      return () => unsub();
+    }
+  }, [user?.role, user?.id, actualTeacherUser]);
 
   // Fetch students for the dropdown if we are a teacher
   useEffect(() => {
@@ -56,6 +68,19 @@ function Navigation() {
       
       {/* Developer Toggle / Student Selector */}
       <div className="flex items-center gap-3">
+        {user?.role === 'teacher' && !actualTeacherUser && classes.length > 0 && (
+          <select
+            value={activeClassId || ''}
+            onChange={(e) => setActiveClassId(e.target.value)}
+            className="bg-white text-blue-600 px-3 py-1.5 rounded-md text-sm font-semibold hover:bg-blue-50 transition shadow-sm outline-none cursor-pointer"
+          >
+            <option value="" disabled>Select Class...</option>
+            {classes.map(c => (
+              <option key={c.id} value={c.id}>{c.name} ({c.term})</option>
+            ))}
+          </select>
+        )}
+
         {user?.role === 'teacher' && !actualTeacherUser && students.length > 0 && (
           <select 
             onChange={handleStudentSelect}

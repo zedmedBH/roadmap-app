@@ -15,10 +15,10 @@ const TASK_COLORS = [
 ];
 
 const TeacherTaskBank: React.FC = () => {
-  const { activeClassId, setActiveClassId, user } = useAuth();
+  const { activeClassId } = useAuth();
   const [templates, setTemplates] = useState<TaskTemplate[]>([]);
   const [groups, setGroups] = useState<{ id: string; title: string }[]>([]);
-  const [classes, setClasses] = useState<any[]>([]);
+  //const [classes, setClasses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
   // Panel & Edit State
@@ -34,17 +34,6 @@ const TeacherTaskBank: React.FC = () => {
     });
     return () => unsubscribe();
   }, []);
-
-  // Fetch Classes for the dropdown
-  useEffect(() => {
-    if (user?.role !== 'teacher') return;
-    const qClasses = query(collection(db, 'classes'), where('teacherId', '==', user.id));
-    const unsubscribeClasses = onSnapshot(qClasses, (snapshot) => {
-      const fetchedClasses = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setClasses(fetchedClasses);
-    });
-    return () => unsubscribeClasses();
-  }, [user]);
 
   // Fetch groups so the TaskPanel can broadcast team tasks
   useEffect(() => {
@@ -134,20 +123,7 @@ const TeacherTaskBank: React.FC = () => {
         </div>
         
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
-          {classes.length > 0 && (
-            <select
-              value={activeClassId || ''}
-              onChange={(e) => setActiveClassId(e.target.value)}
-              className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2 font-bold outline-none flex-1"
-            >
-              <option value="" disabled>-- Select a Class --</option>
-              {classes.map(c => (
-                <option key={c.id} value={c.id}>
-                  {c.name} ({c.term})
-                </option>
-              ))}
-            </select>
-          )}
+          
           <button 
             onClick={() => {
               setEditingTask(null);

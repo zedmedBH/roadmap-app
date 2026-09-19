@@ -19,8 +19,8 @@ export interface RoadmapGroup {
 
 
 const TimelineView: React.FC = () => {
-  const { user, activeClassId, setActiveClassId } = useAuth();
-  const [classes, setClasses] = useState<any[]>([]);
+  const { user, activeClassId } = useAuth();
+  //const [classes, setClasses] = useState<any[]>([]);
   const [baseGroups, setBaseGroups] = useState<RoadmapGroup[]>([]);
   const [items, setItems] = useState<any[]>([]);
   const [students, setStudents] = useState<AppUser[]>([]); 
@@ -113,16 +113,6 @@ const TimelineView: React.FC = () => {
     };
   }, [user, activeClassId]);
 
-  useEffect(() => {
-    if (user?.role !== 'teacher') return;
-    const qClasses = query(collection(db, 'classes'), where('teacherId', '==', user.id));
-    const unsubscribeClasses = onSnapshot(qClasses, (snapshot) => {
-      const fetchedClasses = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setClasses(fetchedClasses);
-    });
-    return () => unsubscribeClasses();
-  }, [user]);
-
   let renderedGroups: RoadmapGroup[] = [];
   let renderedItems = items;
 
@@ -189,14 +179,32 @@ const TimelineView: React.FC = () => {
 
   const handleItemResize = async (itemId: string, time: number, edge: 'left' | 'right') => {
     const item = items.find(i => i.id === itemId);
-    if (user?.role === 'student' && !item.userId) { alert("You cannot resize master roadmap tasks."); return; }
+    if (user?.role === 'student' && !item.userId) { 
+      alert("You cannot resize master roadmap tasks."); 
+      return; 
+    }
     if (!item) return;
 
-    const newStartTime = edge === 'left' ? time : item.start_time;
-    const newEndTime = edge === 'right' ? time : item.end_time;
+    let newStartTime = edge === 'left' ? time : item.start_time;
+    let newEndTime = edge === 'right' ? time : item.end_time;
+
+    // Enforce a minimum duration of 2 days
+    const MIN_DURATION_MS = 2 * 24 * 60 * 60 * 1000;
+    
+    if (newEndTime - newStartTime < MIN_DURATION_MS) {
+      if (edge === 'left') {
+        newStartTime = newEndTime - MIN_DURATION_MS;
+      } else {
+        newEndTime = newStartTime + MIN_DURATION_MS;
+      }
+    }
 
     setItems(prev => prev.map(i => i.id === itemId ? { ...i, start_time: newStartTime, end_time: newEndTime } : i));
-    try { await updateDoc(doc(db, 'timelineItems', itemId), { start_time: newStartTime, end_time: newEndTime }); } catch (error) {}
+    try { 
+      await updateDoc(doc(db, 'timelineItems', itemId), { start_time: newStartTime, end_time: newEndTime }); 
+    } catch (error) {
+      console.error("Failed to resize task:", error);
+    }
   };
 
   if (loading) return <div className="p-8 text-center text-gray-500">Loading timeline data...</div>;
@@ -208,19 +216,6 @@ const TimelineView: React.FC = () => {
       <div className="bg-white p-6 rounded-lg shadow-md mt-6 relative overflow-hidden">
         <div className="flex justify-between items-center mb-6 border-b pb-4">
           <h2 className="text-xl font-bold text-gray-800">{user?.role === 'teacher' ? 'Master Roadmap' : 'My Roadmap'}</h2>
-          {user?.role === 'teacher' && classes.length > 0 && (
-            <select
-              value={activeClassId || ''}
-              onChange={(e) => setActiveClassId(e.target.value)}
-              className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 font-bold outline-none"
-            >
-              {classes.map(c => (
-                <option key={c.id} value={c.id}>
-                  {c.name} ({c.term})
-                </option>
-              ))}
-            </select>
-          )}
 
         </div>
         {renderedGroups.length === 0 ? (

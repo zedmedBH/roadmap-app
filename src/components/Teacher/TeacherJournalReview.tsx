@@ -57,15 +57,17 @@ const TeacherJournalReview: React.FC = () => {
         const activeTasks = snap.docs
           .map(d => ({ id: d.id, ...d.data() } as any))
           .filter(t => !t.unclaimed && (t.group === activeGroupId || t.group === selectedStudentId))
+          .filter(t => t.requiresJournal !== false)
           .map(t => ({ 
             id: t.id, 
             title: t.title, 
             rubricStrands: t.rubricStrands,
             journalInstructions: t.journalInstructions,
-            group: t.group,             
-            start_time: t.start_time,   
-            end_time: t.end_time        
-          } as TimelineItem));
+            group: t.group,
+            start_time: t.start_time,
+            end_time: t.end_time
+          } as TimelineItem))
+          .sort((a, b) => b.start_time - a.start_time);
 
         setTasks(activeTasks);
       });

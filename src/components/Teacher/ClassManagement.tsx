@@ -72,17 +72,6 @@ const ClassManagement: React.FC = () => {
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-xl font-bold text-gray-800">Class Management</h2>
         
-        {classes.length > 0 && (
-          <select 
-            value={activeClassId || ''} 
-            onChange={(e) => setActiveClassId(e.target.value)}
-            className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 font-bold"
-          >
-            {classes.map(c => (
-              <option key={c.id} value={c.id}>{c.name} ({c.term})</option>
-            ))}
-          </select>
-        )}
       </div>
 
       <form onSubmit={handleCreateClass} className="flex gap-4 items-end bg-gray-50 p-4 rounded-lg border border-gray-200">

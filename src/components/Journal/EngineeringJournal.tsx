@@ -66,21 +66,23 @@ const EngineeringJournal: React.FC = () => {
 
     const qTasks = query(collection(db, 'timelineItems'));
     const unsubTasks = onSnapshot(qTasks, (snap) => {
-      const activeTasks = snap.docs
-        .map(d => ({ id: d.id, ...d.data() } as any))
-        .filter(t => !t.unclaimed && (t.group === activeGroupId || t.group === user.id))
-        .map(t => ({ 
-          id: t.id, 
-          title: t.title, 
-          rubricStrands: t.rubricStrands,
-          journalInstructions: t.journalInstructions,
-          group: t.group,
-          start_time: t.start_time,
-          end_time: t.end_time
-        } as TimelineItem));
-            
-      setTasks(activeTasks);
-    });
+  const activeTasks = snap.docs
+    .map(d => ({ id: d.id, ...d.data() } as any))
+    .filter(t => !t.unclaimed && (t.group === activeGroupId || t.group === user.id))
+    .filter(t => t.requiresJournal !== false)
+    .map(t => ({ 
+       id: t.id, 
+       title: t.title, 
+       rubricStrands: t.rubricStrands,
+       journalInstructions: t.journalInstructions,
+       group: t.group,
+       start_time: t.start_time,
+       end_time: t.end_time
+    } as TimelineItem))
+    .sort((a, b) => b.start_time - a.start_time);
+
+  setTasks(activeTasks);
+});
 
     const qSubmissions = query(collection(db, 'submissions'), where('userId', '==', user.id));
     const unsubSubmissions = onSnapshot(qSubmissions, (snap) => {

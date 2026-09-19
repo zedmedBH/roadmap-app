@@ -39,6 +39,7 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups, editTask
   const [newResourceTitle, setNewResourceTitle] = useState('');
   const [newResourceUrl, setNewResourceUrl] = useState('');
   const [journalInstructions, setJournalInstructions] = useState('');
+  const [requiresJournal, setRequiresJournal] = useState(true);
   
   const [existingTemplates, setExistingTemplates] = useState<{id: string, title: string}[]>([]);
   const [selectedDependencies, setSelectedDependencies] = useState<string[]>([]);
@@ -59,6 +60,7 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups, editTask
       setSubTasks(editTask.subtasks || []);
       setSelectedDependencies(editTask.dependencies || []);
       setJournalInstructions(editTask.journalInstructions || '');
+      setRequiresJournal(editTask.requiresJournal !== false);
       
       if (editTask.rubricStrands) {
         setSelectedRubrics(editTask.rubricStrands.map((r: any) => ({
@@ -79,6 +81,7 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups, editTask
       setSelectedDependencies([]);
       setJournalInstructions('');
       setSelectedRubrics([]);
+      setRequiresJournal(true);
     }
   }, [editTask, isOpen]);
 
@@ -184,6 +187,7 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups, editTask
           dependencies: selectedDependencies,
           rubricStrands: selectedStrandsToEmbed,
           journalInstructions: journalInstructions.trim(),
+          requiresJournal: requiresJournal,
         });
 
         // Cascade updates to all active timeline copies globally
@@ -197,7 +201,8 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups, editTask
             color: color,
             dependencies: selectedDependencies,
             rubricStrands: selectedStrandsToEmbed,
-            journalInstructions: journalInstructions.trim()
+            journalInstructions: journalInstructions.trim(),
+            requiresJournal: requiresJournal
           })
         );
         await Promise.all(updatePromises);
@@ -374,14 +379,27 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ isOpen, onClose, groups, editTask
               </div>
 
               {/* Journal Instructions */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Journal Instructions (Optional)</label>
-                <textarea
-                  value={journalInstructions}
-                  onChange={e => setJournalInstructions(e.target.value)}
-                  className="w-full border border-purple-300 bg-purple-50 p-2 rounded focus:ring-purple-500 outline-none min-h-[80px]"
-                  placeholder="Provide specific prompts or questions for the student to answer in their journal entry..."
-                />
+              <div className="bg-purple-50 p-3 rounded border border-purple-100">
+                <div className="flex justify-between items-center mb-2">
+                  <label className="block text-sm font-medium text-purple-900">Journal Entry Requirements</label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      checked={requiresJournal} 
+                      onChange={(e) => setRequiresJournal(e.target.checked)}
+                      className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                    />
+                    <span className="text-sm text-purple-800 font-medium">Requires Journal Entry</span>
+                  </label>
+                </div>
+                {requiresJournal && (
+                  <textarea
+                    value={journalInstructions}
+                    onChange={e => setJournalInstructions(e.target.value)}
+                    className="w-full border border-purple-300 bg-white p-2 rounded focus:ring-purple-500 outline-none min-h-[80px]"
+                    placeholder="Provide specific prompts or questions for the student to answer..."
+                  />
+                )}
               </div>
 
               {/* ASSESSMENT CRITERIA & MAX BANDS SECTION */}
