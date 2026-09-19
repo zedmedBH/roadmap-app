@@ -1,33 +1,23 @@
-import React, { useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot, addDoc, doc, getDoc } from 'firebase/firestore';
+import React, { useState} from 'react';
+import { collection, addDoc, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { useAuth } from '../../context/AuthContext';
 import { createDriveFolder } from '../../utils/driveUpload';
 
-interface SchoolClass {
+/*interface SchoolClass {
   id: string;
   name: string;
   term: string;
   teacherId: string;
   driveFolderId?: string;
-}
+}*/
 
 const ClassManagement: React.FC = () => {
   const { user, setActiveClassId } = useAuth();
-  const [classes, setClasses] = useState<SchoolClass[]>([]);
+  //const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [newClassName, setNewClassName] = useState('');
   const [newTerm, setNewTerm] = useState('');
   const [isCreating, setIsCreating] = useState(false);
-
-  useEffect(() => {
-    if (user?.role !== 'teacher') return;
-    const q = query(collection(db, 'classes'), where('teacherId', '==', user.id));
-    const unsubscribe = onSnapshot(q, (snap) => {
-      const fetchedClasses = snap.docs.map(d => ({ id: d.id, ...d.data() } as SchoolClass));
-      setClasses(fetchedClasses);
-    });
-    return () => unsubscribe();
-  }, [user?.role, user?.id]); // Removed activeClassId from array
 
   const handleCreateClass = async (e: React.SyntheticEvent) => {
     e.preventDefault();
