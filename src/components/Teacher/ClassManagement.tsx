@@ -13,7 +13,7 @@ interface SchoolClass {
 }
 
 const ClassManagement: React.FC = () => {
-  const { user, activeClassId, setActiveClassId } = useAuth();
+  const { user, setActiveClassId } = useAuth();
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [newClassName, setNewClassName] = useState('');
   const [newTerm, setNewTerm] = useState('');
